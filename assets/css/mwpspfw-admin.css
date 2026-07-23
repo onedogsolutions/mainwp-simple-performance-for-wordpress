@@ -1,0 +1,111 @@
+/**
+ * MainWP for Simple Performance for WordPress - admin styling.
+ *
+ * Layout only — no colors. Markup uses MainWP's own Fomantic UI classes
+ * (ui segment/table/form/message/button/checkbox/input) so the screen
+ * inherits MainWP's theme (including dark mode) instead of fighting it with
+ * a second, hardcoded palette.
+ */
+
+.mwpspfw-child-version {
+	font-style: italic;
+	opacity: 0.7;
+}
+
+/**
+ * Fomantic's own '.ui.tab.segment' display rule is unlayered author CSS and
+ * can otherwise win over the browser's low-specificity [hidden] UA rule —
+ * force it explicitly so our plain-JS tab switching always actually hides
+ * the inactive panels, regardless of Fomantic's own defaults.
+ */
+.mwpspfw-tabpanel[hidden] {
+	display: none !important;
+}
+
+.mwpspfw-field-description {
+	margin: 4px 0 0;
+	font-size: 0.9em;
+	opacity: 0.7;
+}
+
+.mwpspfw-int-input {
+	max-width: 120px;
+}
+
+.mwpspfw-actions {
+	margin-top: 16px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.mwpspfw-save-status {
+	opacity: 0.7;
+}
+
+.mwpspfw-overview-table .mwpspfw-site-url {
+	font-size: 12px;
+	opacity: 0.7;
+}
+
+/* ─── Route list textareas ──────────────────────────────────────────────── */
+
+.mwpspfw-route-list {
+	font-family: monospace;
+	font-size: 13px;
+	min-height: 80px;
+	resize: vertical;
+}
+
+/* ─── Read-only CSP display ─────────────────────────────────────────────── */
+
+.mwpspfw-readonly-csp {
+	margin-top: 8px;
+}
+
+.mwpspfw-csp-preview {
+	padding: 12px;
+	border-radius: 4px;
+	font-size: 12px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.mwpspfw-csp-table {
+	font-size: 12px;
+}
+
+.mwpspfw-csp-table code {
+	font-size: 11px;
+}
+
+/* ─── Bulk install bar ─────────────────────────────────────────────────── */
+
+.mwpspfw-bulk-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.mwpspfw-checkbox {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+	vertical-align: middle;
+}
+
+.mwpspfw-bridge-missing {
+	margin-top: 10px;
+}
+
+/* ─── Field spacing ─────────────────────────────────────────────────────── */
+
+.mwpspfw-field {
+	margin-bottom: 14px;
+}
+
+.mwpspfw-field-toggle {
+	margin-bottom: 10px;
+}

@@ -1,0 +1,77 @@
+=== MainWP for Simple Performance for WordPress ===
+Contributors: onedogsolutions
+Tags: mainwp, performance, optimization, child sites, management
+Requires at least: 5.8
+Tested up to: 6.7
+Requires PHP: 7.4
+Stable tag: 1.0.0
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+
+Configure the Simple Performance for WordPress plugin on each connected child site directly from the MainWP Dashboard.
+
+== Description ==
+
+A MainWP Dashboard extension for configuring the [Simple Performance for WordPress](https://wordpress.org/plugins/simple-performance-for-wordpress/) plugin on each connected child site, without logging in to that site individually.
+
+Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each individual child site's own screen (Sites → site name → Performance), covering the same five tabs as SPFW's own settings screen:
+
+* **Core Optimizations** — Disable emojis, embeds, dashicons, XML-RPC, and more. Control heartbeat, post revisions, autosave intervals.
+* **REST API** — Require authentication, disable namespaces, whitelist routes.
+* **Hardening** — Directory hardening, file editing, author enumeration, security headers, CSP, HSTS.
+* **Fonts** — Localize Google Fonts for GDPR compliance and faster loading.
+* **WooCommerce** — Disable cart fragments, scripts/styles on non-shop pages, widgets, and more.
+
+= Requirements =
+
+* MainWP Dashboard plugin (latest version)
+* Simple Performance for WordPress 1.8.0 or later on child sites (carries the bridge this extension talks to)
+
+= Features =
+
+* Per-site configuration — each child site has its own settings tab
+* Read current settings from child sites in real-time
+* Push setting changes to child sites via MainWP's secure signed channel
+* One-click install of SPFW from wordpress.org on any child site
+* Bulk install SPFW on multiple sites at once
+* Status check — quickly see which optimizations are active on each site
+
+== Installation ==
+
+1. Install and activate the MainWP Dashboard plugin on your management site.
+2. Upload the `mainwp-simple-performance-for-wordpress` folder to `/wp-content/plugins/` or install via the Plugins screen.
+3. Activate the plugin through the Plugins screen.
+4. Navigate to MainWP → Extensions → Simple Performance for WordPress to see your connected sites.
+5. Click "Configure" on any site to manage its performance settings.
+
+== Frequently Asked Questions ==
+
+= Does this plugin work without MainWP? =
+
+No. This is a MainWP Dashboard extension and requires the MainWP Dashboard plugin to be installed and activated.
+
+= What version of Simple Performance for WordPress is required on child sites? =
+
+Version 1.8.0 or later, which includes the MainWP child bridge. If a child site runs an older version, you'll see a notice with an option to install/upgrade.
+
+= Can I manage CSP directives from MainWP? =
+
+The CSP directive builder is complex and site-specific, so it remains read-only from the MainWP Dashboard. You can enable/disable CSP and set the mode, but fine-tuning directives should be done in the child site's own admin panel.
+
+= Can I trigger a font scan from MainWP? =
+
+No. Font scanning touches the child site's filesystem and should be triggered from the child's own admin panel. You can, however, manage the localize toggle and manual font families from MainWP.
+
+== Changelog ==
+
+= 1.0.0 =
+* Initial release.
+* Per-site configuration tab with five settings groups.
+* Real-time settings read/write via MainWP's signed channel.
+* One-click and bulk install of SPFW from wordpress.org.
+* Status check for quick overview of active optimizations.
+
+== Upgrade Notice ==
+
+= 1.0.0 =
+Initial release.
