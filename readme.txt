@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,11 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 
 == Changelog ==
 
+= 1.2.0 =
+* Added server-side debug logging for install operations.
+* Added Debug Log section with View/Clear buttons on Extensions page.
+* Improved bulk install error reporting (per-row status, console logging).
+
 = 1.1.0 =
 * Added drag-and-drop ZIP upload for custom SPFW builds.
 * Added package URL setting for self-hosted plugin ZIPs.
@@ -78,6 +83,9 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Adds debug logging and improved error reporting for bulk installs.
 
 = 1.1.0 =
 Adds drag-and-drop ZIP upload for custom SPFW builds and self-hosted package URL support.

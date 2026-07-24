@@ -123,7 +123,24 @@ class MWPSPFW_Overview {
 					<span id="mwpspfw-package-status" class="mwpspfw-save-status"></span>
 				</form>
 			</div>
-
+			
+			<!-- Debug Log Section -->
+			<div class="ui segment">
+				<h3 class="ui header"><?php esc_html_e( 'Debug Log', 'mainwp-simple-performance-for-wordpress' ); ?></h3>
+				<p>
+					<?php esc_html_e( 'Installation attempts are logged for troubleshooting. Log file:', 'mainwp-simple-performance-for-wordpress' ); ?>
+					<code><?php echo esc_html( str_replace( ABSPATH, '', MWPSPFW_Connector::get_log_path() ) ); ?></code>
+				</p>
+				<button type="button" class="ui button" id="mwpspfw-view-log-btn">
+					<?php esc_html_e( 'View Log', 'mainwp-simple-performance-for-wordpress' ); ?>
+				</button>
+				<button type="button" class="ui button" id="mwpspfw-clear-log-btn">
+					<?php esc_html_e( 'Clear Log', 'mainwp-simple-performance-for-wordpress' ); ?>
+				</button>
+				<span id="mwpspfw-log-status" class="mwpspfw-save-status"></span>
+				<pre id="mwpspfw-log-output" class="mwpspfw-log-output" hidden></pre>
+			</div>
+			
 			<?php if ( empty( $sites ) ) : ?>
 				<div class="ui message"><?php esc_html_e( 'No connected child sites were found.', 'mainwp-simple-performance-for-wordpress' ); ?></div>
 			<?php else : ?>
@@ -397,5 +414,45 @@ class MWPSPFW_Overview {
 				'message' => __( 'Simple Performance for WordPress was installed and activated.', 'mainwp-simple-performance-for-wordpress' ),
 			)
 		);
+	}
+
+	/**
+	 * AJAX handler: retrieve the debug log contents.
+	 */
+	public function ajax_get_log() {
+		check_ajax_referer( 'mwpspfw_debug_log', 'nonce' );
+
+		if ( ! current_user_can( 'install_plugins' ) ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to view the debug log.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$lines   = isset( $_POST['lines'] ) ? intval( $_POST['lines'] ) : 100;
+		$content = MWPSPFW_Connector::get_log_contents( $lines );
+
+		wp_send_json_success(
+			array(
+				'content' => $content ? $content : __( 'Log is empty.', 'mainwp-simple-performance-for-wordpress' ),
+				'path'    => MWPSPFW_Connector::get_log_path(),
+			)
+		);
+	}
+
+	/**
+	 * AJAX handler: clear the debug log.
+	 */
+	public function ajax_clear_log() {
+		check_ajax_referer( 'mwpspfw_debug_log', 'nonce' );
+
+		if ( ! current_user_can( 'install_plugins' ) ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to clear the debug log.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$cleared = MWPSPFW_Connector::clear_log();
+
+		if ( $cleared ) {
+			wp_send_json_success( array( 'message' => __( 'Debug log cleared.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		} else {
+			wp_send_json_error( array( 'message' => __( 'Failed to clear the debug log.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
 	}
 }

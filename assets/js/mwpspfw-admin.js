@@ -388,6 +388,7 @@
 				var done = 0;
 				var succeeded = 0;
 				var failed = 0;
+				var errors = [];
 
 				bulkBtn.disabled = true;
 
@@ -395,14 +396,30 @@
 					if ( done >= total ) {
 						bulkBtn.disabled = false;
 						if ( bulkStatus ) {
-							bulkStatus.textContent = admin.bulkDone.replace( '%1$d', succeeded ).replace( '%2$d', failed );
+							var summary = admin.bulkDone.replace( '%1$d', succeeded ).replace( '%2$d', failed );
+							// Show first error if all failed.
+							if ( failed > 0 && errors.length > 0 ) {
+								summary += ' ' + errors[ 0 ];
+							}
+							bulkStatus.textContent = summary;
+						}
+						// Log all errors to console for debugging.
+						if ( errors.length > 0 ) {
+							console.error( 'SPFW Bulk Install Errors:', errors );
 						}
 						return;
 					}
 
-					var siteId = selected[ done ].value;
+					var cb = selected[ done ];
+					var siteId = cb.value;
+					var row = cb.closest( 'tr' );
+					var statusCell = row ? row.querySelector( '.mwpspfw-status-cell' ) : null;
+
 					if ( bulkStatus ) {
 						bulkStatus.textContent = admin.bulkInstalling.replace( '%1$d', done + 1 ).replace( '%2$d', total );
+					}
+					if ( statusCell ) {
+						statusCell.textContent = admin.installing;
 					}
 
 					var data = 'action=mwpspfw_install_spfw&nonce=' + encodeURIComponent( admin.installNonce ) + '&site_id=' + encodeURIComponent( siteId );
@@ -411,8 +428,19 @@
 						done++;
 						if ( response.success ) {
 							succeeded++;
+							if ( statusCell ) {
+								statusCell.textContent = admin.installed;
+							}
 						} else {
 							failed++;
+							var msg = ( response.data && response.data.message ) ? response.data.message : 'Unknown error';
+							if ( statusCell ) {
+								statusCell.textContent = '✗ ' + msg;
+							}
+							// Collect unique errors.
+							if ( errors.indexOf( msg ) === -1 ) {
+								errors.push( msg );
+							}
 						}
 						installNext();
 					} );
@@ -629,6 +657,66 @@
 		} );
 	}
 
+	/* ─── Overview: Debug log viewer ───────────────────────────────────────── */
+
+	function initDebugLog() {
+		var viewBtn = $( '#mwpspfw-view-log-btn' );
+		var clearBtn = $( '#mwpspfw-clear-log-btn' );
+		var logOutput = $( '#mwpspfw-log-output' );
+		var logStatus = $( '#mwpspfw-log-status' );
+
+		if ( ! viewBtn || ! clearBtn ) {
+			return;
+		}
+
+		viewBtn.addEventListener( 'click', function () {
+			if ( logStatus ) {
+				logStatus.textContent = 'Loading…';
+			}
+
+			var data = 'action=mwpspfw_get_log&nonce=' + encodeURIComponent( admin.logNonce ) + '&lines=200';
+
+			ajaxPost( data, function ( response ) {
+				if ( logStatus ) {
+					logStatus.textContent = '';
+				}
+				if ( response.success && logOutput ) {
+					logOutput.textContent = response.data.content;
+					logOutput.hidden = false;
+					// Scroll to bottom to show most recent entries.
+					logOutput.scrollTop = logOutput.scrollHeight;
+				} else if ( logOutput ) {
+					logOutput.textContent = ( response.data && response.data.message ) || 'Failed to load log.';
+					logOutput.hidden = false;
+				}
+			} );
+		} );
+
+		clearBtn.addEventListener( 'click', function () {
+			if ( ! window.confirm( 'Clear the debug log?' ) ) {
+				return;
+			}
+
+			if ( logStatus ) {
+				logStatus.textContent = 'Clearing…';
+			}
+
+			var data = 'action=mwpspfw_clear_log&nonce=' + encodeURIComponent( admin.logNonce );
+
+			ajaxPost( data, function ( response ) {
+				if ( logStatus ) {
+					logStatus.textContent = ( response && response.success )
+						? ( response.data && response.data.message ) || 'Cleared.'
+						: ( ( response && response.data && response.data.message ) || 'Failed to clear.' );
+				}
+				if ( response.success && logOutput ) {
+					logOutput.textContent = '';
+					logOutput.hidden = true;
+				}
+			} );
+		} );
+	}
+
 	/* ─── Init ────────────────────────────────────────────────────────────── */
 
 	function init() {
@@ -640,6 +728,7 @@
 		initInstallButtons();
 		initBulkActions();
 		initPackageForm();
+		initDebugLog();
 	}
 
 	if ( 'loading' === document.readyState ) {

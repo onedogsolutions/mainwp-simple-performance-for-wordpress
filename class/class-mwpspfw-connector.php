@@ -85,6 +85,12 @@ class MWPSPFW_Connector {
 			$install_args['slug'] = 'simple-performance-for-wordpress';
 		}
 
+		self::log( 'install_package', array(
+			'site_id'      => $site_id,
+			'package_url'  => $package_url ? $package_url : '(wordpress.org)',
+			'install_args' => $install_args,
+		) );
+
 		$response = apply_filters(
 			'mainwp_fetchurlauthed',
 			$mwpspfw_activator->get_child_file(),
@@ -94,23 +100,34 @@ class MWPSPFW_Connector {
 			$install_args
 		);
 
+		self::log( 'install_response', array(
+			'site_id'  => $site_id,
+			'response' => $response,
+		) );
+
 		if ( self::is_transport_failure( $response ) ) {
-			return array(
+			$result = array(
 				'ok'         => false,
 				'error_type' => 'transport',
 				'message'    => self::transport_error_message( $response ),
 				'data'       => null,
 			);
+			self::log( 'install_failed', array( 'site_id' => $site_id, 'result' => $result ) );
+			return $result;
 		}
 
 		if ( empty( $response['installation'] ) || 'SUCCESS' !== $response['installation'] ) {
-			return array(
+			$result = array(
 				'ok'         => false,
 				'error_type' => 'install_error',
 				'message'    => __( 'The child site reported an installation error.', 'mainwp-simple-performance-for-wordpress' ),
 				'data'       => $response,
 			);
+			self::log( 'install_failed', array( 'site_id' => $site_id, 'result' => $result ) );
+			return $result;
 		}
+
+		self::log( 'install_success', array( 'site_id' => $site_id ) );
 
 		return array(
 			'ok'         => true,
@@ -216,5 +233,85 @@ class MWPSPFW_Connector {
 			'message'    => '',
 			'data'       => $envelope,
 		);
+	}
+
+	/**
+	 * Write a debug log entry to wp-content/uploads/mwpspfw-logs/debug.log.
+	 * Logging is always enabled for now; can be gated behind a constant or
+	 * option later if needed.
+	 *
+	 * @param string               $event   Event name (e.g. 'install_package').
+	 * @param array<string,mixed>  $context Contextual data to log.
+	 */
+	public static function log( $event, array $context = array() ) {
+		$upload_dir = wp_upload_dir();
+		$log_dir    = trailingslashit( $upload_dir['basedir'] ) . 'mwpspfw-logs';
+
+		if ( ! file_exists( $log_dir ) ) {
+			wp_mkdir_p( $log_dir );
+			// Prevent direct access.
+			file_put_contents( $log_dir . '/.htaccess', 'Deny from all' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+			file_put_contents( $log_dir . '/index.php', '<?php // Silence is golden.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		}
+
+		$log_file = $log_dir . '/debug.log';
+
+		$entry = sprintf(
+			"[%s] %s: %s\n",
+			gmdate( 'Y-m-d H:i:s' ),
+			$event,
+			wp_json_encode( $context, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES )
+		);
+
+		file_put_contents( $log_file, $entry, FILE_APPEND | LOCK_EX ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+	}
+
+	/**
+	 * Get the path to the debug log file.
+	 *
+	 * @return string
+	 */
+	public static function get_log_path() {
+		$upload_dir = wp_upload_dir();
+		return trailingslashit( $upload_dir['basedir'] ) . 'mwpspfw-logs/debug.log';
+	}
+
+	/**
+	 * Get the contents of the debug log file.
+	 *
+	 * @param int $lines Number of recent lines to return (0 = all).
+	 * @return string
+	 */
+	public static function get_log_contents( $lines = 0 ) {
+		$log_file = self::get_log_path();
+
+		if ( ! file_exists( $log_file ) ) {
+			return '';
+		}
+
+		$content = file_get_contents( $log_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+
+		if ( $lines > 0 ) {
+			$all_lines = explode( "\n", trim( $content ) );
+			$all_lines = array_slice( $all_lines, -$lines );
+			return implode( "\n", $all_lines );
+		}
+
+		return $content;
+	}
+
+	/**
+	 * Clear the debug log file.
+	 *
+	 * @return bool
+	 */
+	public static function clear_log() {
+		$log_file = self::get_log_path();
+
+		if ( file_exists( $log_file ) ) {
+			return file_put_contents( $log_file, '' ) !== false; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		}
+
+		return true;
 	}
 }

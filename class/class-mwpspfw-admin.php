@@ -57,6 +57,8 @@ class MWPSPFW_Admin {
 		add_action( 'wp_ajax_mwpspfw_save_package', array( MWPSPFW_Overview::get_instance(), 'ajax_save_package' ) );
 		add_action( 'wp_ajax_mwpspfw_upload_package', array( MWPSPFW_Overview::get_instance(), 'ajax_upload_package' ) );
 		add_action( 'wp_ajax_mwpspfw_install_spfw', array( MWPSPFW_Overview::get_instance(), 'ajax_install' ) );
+		add_action( 'wp_ajax_mwpspfw_get_log', array( MWPSPFW_Overview::get_instance(), 'ajax_get_log' ) );
+		add_action( 'wp_ajax_mwpspfw_clear_log', array( MWPSPFW_Overview::get_instance(), 'ajax_clear_log' ) );
 	}
 
 	/**
@@ -95,6 +97,7 @@ class MWPSPFW_Admin {
 				'packageNonce'   => wp_create_nonce( 'mwpspfw_save_package' ),
 				'uploadNonce'    => wp_create_nonce( 'mwpspfw_upload_package' ),
 				'installNonce'   => wp_create_nonce( 'mwpspfw_install_spfw' ),
+				'logNonce'       => wp_create_nonce( 'mwpspfw_debug_log' ),
 				'confirmUnsaved' => __( 'You have unsaved changes. Leave this page anyway?', 'mainwp-simple-performance-for-wordpress' ),
 				'confirmInstall' => __( 'Install (or reinstall/upgrade) Simple Performance for WordPress on this site now?', 'mainwp-simple-performance-for-wordpress' ),
 				'saving'         => __( 'Saving…', 'mainwp-simple-performance-for-wordpress' ),

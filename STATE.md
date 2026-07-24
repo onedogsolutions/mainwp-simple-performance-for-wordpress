@@ -5,7 +5,37 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-## Current Phase: Phase 2 (Drag-and-drop package upload, v1.1.0)
+## Current Phase: Phase 3 (Debug logging + improved error reporting, v1.2.0)
+
+Added server-side debug logging for install operations and improved bulk install
+error reporting to help diagnose installation failures across child sites.
+
+### Phase 3 Modifications (v1.2.0)
+
+- **Server-side debug logging** in `class-mwpspfw-connector.php`: new `log()`,
+  `get_log_path()`, `get_log_contents()`, and `clear_log()` methods. All
+  install attempts are logged to `wp-content/uploads/mwpspfw-logs/debug.log`
+  with timestamps, event names, and JSON-encoded context (site ID, package
+  URL, install args, raw response, error details). Log directory is protected
+  with `.htaccess` (Deny from all) and `index.php` (silence) guards.
+- **Debug Log UI section** in `class-mwpspfw-overview.php`: new segment on the
+  Extensions page showing the log file path, a "View Log" button (loads last
+  200 lines into a scrollable `<pre>` panel), and a "Clear Log" button.
+- **New AJAX endpoints** `mwpspfw_get_log` and `mwpspfw_clear_log`
+  (`MWPSPFW_Overview::ajax_get_log()` / `ajax_clear_log()`): gated behind
+  `install_plugins` capability and `mwpspfw_debug_log` nonce.
+- **Improved bulk install error reporting** in `mwpspfw-admin.js`: each row's
+  Status cell now shows "Installing…" during the operation and "Installed." or
+  "✗ [error message]" on completion. Unique errors are collected and the first
+  is appended to the summary line. All errors are logged to the browser
+  console via `console.error()` for debugging.
+- **New CSS** in `mwpspfw-admin.css`: `.mwpspfw-log-output` styling (monospace
+  font, scrollable, max-height 400px, inherits theme colors).
+- **New localized string** in `MWPSPFW_Admin::enqueue_assets()`: `logNonce`.
+- Version bumped to 1.2.0 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog).
+
+## Historical Phase: Phase 2 (Drag-and-drop package upload, v1.1.0)
 
 Added a drag-and-drop ZIP upload feature to the Extensions-page overview,
 modeled on the sister project `mainwp-for-google-security-for-wordpress` Phase 8.
@@ -179,6 +209,11 @@ callbacks so all validation stays single-source.
   install works on sites without SPFW.
 
 ## Historical Phases
+
+### Phase 2 (Drag-and-drop package upload, v1.1.0)
+
+Added drag-and-drop ZIP upload for custom SPFW builds and self-hosted package
+URL support. See the Phase 2 Modifications section above for full details.
 
 ### Phase 1 (Initial implementation, v1.0.0)
 
