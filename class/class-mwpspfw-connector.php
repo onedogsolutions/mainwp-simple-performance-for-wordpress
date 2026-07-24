@@ -59,7 +59,11 @@ class MWPSPFW_Connector {
 	 * Install (or upgrade-in-place) Simple Performance for WordPress on a
 	 * child site using MainWP's standard 'installplugintheme' child callable.
 	 * Uses the configured package URL if set, otherwise falls back to the
-	 * wordpress.org slug-based install.
+	 * wordpress.org download URL.
+	 *
+	 * Note: MainWP Child's installplugintheme callable requires a 'url'
+	 * parameter pointing to a ZIP file. It does not support slug-based
+	 * installs, so we construct the wordpress.org download URL directly.
 	 *
 	 * @param int $site_id MainWP internal website ID.
 	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
@@ -67,27 +71,25 @@ class MWPSPFW_Connector {
 	public static function install_package( $site_id ) {
 		global $mwpspfw_activator;
 
-		// Check for a configured package URL; fall back to wordpress.org slug.
+		// Check for a configured package URL; fall back to wordpress.org.
 		$package     = get_option( 'mwpspfw_package', array() );
 		$package_url = is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '';
 
+		// MainWP Child requires a 'url' parameter - construct wordpress.org URL if needed.
+		if ( empty( $package_url ) ) {
+			$package_url = 'https://downloads.wordpress.org/plugin/simple-performance-for-wordpress.latest-stable.zip';
+		}
+
 		$install_args = array(
 			'type'           => 'plugin',
+			'url'            => $package_url,
 			'activatePlugin' => 'yes',
 			'overwrite'      => true,
 		);
 
-		if ( ! empty( $package_url ) ) {
-			// Use the custom package URL (uploaded ZIP or self-hosted).
-			$install_args['url'] = $package_url;
-		} else {
-			// Fall back to wordpress.org slug-based install.
-			$install_args['slug'] = 'simple-performance-for-wordpress';
-		}
-
 		self::log( 'install_package', array(
 			'site_id'      => $site_id,
-			'package_url'  => $package_url ? $package_url : '(wordpress.org)',
+			'package_url'  => $package_url,
 			'install_args' => $install_args,
 		) );
 

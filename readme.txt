@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,10 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 
 == Changelog ==
 
+= 1.2.1 =
+* Fixed bulk install failure: MainWP Child requires 'url' parameter, not 'slug'.
+* Now uses wordpress.org download URL directly when no custom package is configured.
+
 = 1.2.0 =
 * Added server-side debug logging for install operations.
 * Added Debug Log section with View/Clear buttons on Extensions page.
@@ -83,6 +87,9 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.2.1 =
+Critical fix: bulk install now works correctly with wordpress.org downloads.
 
 = 1.2.0 =
 Adds debug logging and improved error reporting for bulk installs.

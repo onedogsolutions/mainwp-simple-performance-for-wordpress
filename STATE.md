@@ -5,7 +5,25 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-## Current Phase: Phase 3 (Debug logging + improved error reporting, v1.2.0)
+## Current Phase: Phase 4 (Critical install fix, v1.2.1)
+
+Fixed bulk install failure caused by incorrect parameter passed to MainWP Child's
+`installplugintheme` callable. The callable requires a `url` parameter pointing
+to a ZIP file; it does not support `slug`-based installs.
+
+### Phase 4 Modifications (v1.2.1)
+
+- **Fixed `MWPSPFW_Connector::install_package()`**: Now always provides a `url`
+  parameter to the `installplugintheme` callable. When no custom package URL is
+  configured, constructs the wordpress.org download URL directly:
+  `https://downloads.wordpress.org/plugin/simple-performance-for-wordpress.latest-stable.zip`
+- **Root cause**: MainWP Child's `installplugintheme` handler expects `url` for
+  the ZIP download location. The previous `slug` parameter was ignored, causing
+  the error "Plugin or theme not specified, or missing required data."
+- Version bumped to 1.2.1 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog).
+
+## Historical Phase: Phase 3 (Debug logging + improved error reporting, v1.2.0)
 
 Added server-side debug logging for install operations and improved bulk install
 error reporting to help diagnose installation failures across child sites.
@@ -209,6 +227,11 @@ callbacks so all validation stays single-source.
   install works on sites without SPFW.
 
 ## Historical Phases
+
+### Phase 3 (Debug logging + improved error reporting, v1.2.0)
+
+Added server-side debug logging for install operations and improved bulk install
+error reporting. See the Phase 3 Modifications section above for full details.
 
 ### Phase 2 (Drag-and-drop package upload, v1.1.0)
 
