@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -65,6 +65,10 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 
 == Changelog ==
 
+= 1.2.3 =
+* Fixed bulk install failure: MainWP Child expects a JSON-encoded 'url' parameter.
+* Added wp_json_encode() around the package URL to match native MainWP Dashboard behavior.
+
 = 1.2.2 =
 * Added extension key status logging to diagnose free extension authentication.
 
@@ -90,6 +94,9 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.2.3 =
+Critical fix: bulk install now correctly JSON-encodes the package URL for MainWP Child.
 
 = 1.2.1 =
 Critical fix: bulk install now works correctly with wordpress.org downloads.

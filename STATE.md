@@ -5,7 +5,31 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-## Current Phase: Phase 4 (Critical install fix, v1.2.1)
+## Current Phase: Phase 5 (JSON-encode url parameter, v1.2.3)
+
+Fixed bulk install failure caused by sending a raw URL string to MainWP Child's
+`installplugintheme` callable. The child handler calls `json_decode()` on the
+received `url` POST parameter, so the value must be JSON-encoded. A raw URL
+string is invalid JSON and decodes to `null`, causing `WP_Upgrader->run()` to
+receive a null package.
+
+### Phase 5 Modifications (v1.2.3)
+
+- **Fixed `MWPSPFW_Connector::install_package()`**: Now wraps the package URL
+  with `wp_json_encode()` before passing it as the `url` parameter. This matches
+  the native MainWP Dashboard behavior found in
+  `MainWP_Install_Bulk::perform_install()` and `perform_upload()`
+  (`page-mainwp-install-bulk.php`, MainWP Dashboard 6.1.4).
+- **Root cause**: MainWP Child's `install_plugin_theme()` handler
+  (`class-mainwp-child-install.php` line 410, MainWP Child 6.1.4) executes
+  `json_decode( stripslashes( wp_unslash( $_POST['url'] ) ) )`. A raw URL
+  string like `https://...` is not valid JSON, so `json_decode()` returns
+  `null`. The native Dashboard always sends `wp_json_encode( $url )` which
+  produces a quoted JSON string that decodes correctly.
+- Version bumped to 1.2.3 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog).
+
+## Historical Phase: Phase 4 (Critical install fix, v1.2.1)
 
 Fixed bulk install failure caused by incorrect parameter passed to MainWP Child's
 `installplugintheme` callable. The callable requires a `url` parameter pointing
@@ -227,6 +251,12 @@ callbacks so all validation stays single-source.
   install works on sites without SPFW.
 
 ## Historical Phases
+
+### Phase 4 (Critical install fix, v1.2.1)
+
+Fixed bulk install failure caused by incorrect parameter passed to MainWP
+Child's `installplugintheme` callable. See the Phase 4 Modifications section
+above for full details.
 
 ### Phase 3 (Debug logging + improved error reporting, v1.2.0)
 

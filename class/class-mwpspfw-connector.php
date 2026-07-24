@@ -62,8 +62,11 @@ class MWPSPFW_Connector {
 	 * wordpress.org download URL.
 	 *
 	 * Note: MainWP Child's installplugintheme callable requires a 'url'
-	 * parameter pointing to a ZIP file. It does not support slug-based
-	 * installs, so we construct the wordpress.org download URL directly.
+	 * parameter containing a JSON-encoded value (string or array of URLs).
+	 * The child handler calls json_decode() on the received value, so we
+	 * must wp_json_encode() the URL before sending. This matches the native
+	 * MainWP Dashboard behavior (see MainWP_Install_Bulk::perform_install()
+	 * and perform_upload() in page-mainwp-install-bulk.php).
 	 *
 	 * @param int $site_id MainWP internal website ID.
 	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
@@ -90,7 +93,7 @@ class MWPSPFW_Connector {
 
 		$install_args = array(
 			'type'           => 'plugin',
-			'url'            => $package_url,
+			'url'            => wp_json_encode( $package_url ), // Child json_decode()s this value.
 			'activatePlugin' => 'yes',
 			'overwrite'      => true,
 		);
