@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,9 @@ The CSP directive builder is complex and site-specific, so it remains read-only 
 No. Font scanning touches the child site's filesystem and should be triggered from the child's own admin panel. You can, however, manage the localize toggle and manual font families from MainWP.
 
 == Changelog ==
+
+= 1.2.2 =
+* Added extension key status logging to diagnose free extension authentication.
 
 = 1.2.1 =
 * Fixed bulk install failure: MainWP Child requires 'url' parameter, not 'slug'.

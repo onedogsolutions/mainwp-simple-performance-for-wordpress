@@ -71,6 +71,14 @@ class MWPSPFW_Connector {
 	public static function install_package( $site_id ) {
 		global $mwpspfw_activator;
 
+		// Log extension key status for debugging.
+		$child_key = $mwpspfw_activator->get_child_key();
+		self::log( 'install_package_start', array(
+			'site_id'    => $site_id,
+			'child_key'  => $child_key ? '(present)' : '(missing/false)',
+			'child_file' => $mwpspfw_activator->get_child_file(),
+		) );
+
 		// Check for a configured package URL; fall back to wordpress.org.
 		$package     = get_option( 'mwpspfw_package', array() );
 		$package_url = is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '';
