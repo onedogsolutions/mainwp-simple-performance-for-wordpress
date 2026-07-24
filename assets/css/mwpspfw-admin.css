@@ -212,6 +212,12 @@
 	font-size: 0.85em;
 }
 
+/* Disabled state for URL input when a file is uploaded */
+#mwpspfw-package-url:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
 /* ─── Debug log output ──────────────────────────────────────────────────── */
 
 .mwpspfw-log-output {

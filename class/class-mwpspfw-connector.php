@@ -58,8 +58,7 @@ class MWPSPFW_Connector {
 	/**
 	 * Install (or upgrade-in-place) Simple Performance for WordPress on a
 	 * child site using MainWP's standard 'installplugintheme' child callable.
-	 * Uses the configured package URL if set, otherwise falls back to the
-	 * wordpress.org download URL.
+	 * Installs from the configured package URL (set on the Extensions page).
 	 *
 	 * Note: MainWP Child's installplugintheme callable requires a 'url'
 	 * parameter containing a JSON-encoded value (string or array of URLs).
@@ -82,13 +81,24 @@ class MWPSPFW_Connector {
 			'child_file' => $mwpspfw_activator->get_child_file(),
 		) );
 
-		// Check for a configured package URL; fall back to wordpress.org.
 		$package     = get_option( 'mwpspfw_package', array() );
-		$package_url = is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '';
+		$package_url = '';
 
-		// MainWP Child requires a 'url' parameter - construct wordpress.org URL if needed.
-		if ( empty( $package_url ) ) {
-			$package_url = 'https://downloads.wordpress.org/plugin/simple-performance-for-wordpress.latest-stable.zip';
+		// Priority: uploaded file (signed URL) > external URL.
+		if ( is_array( $package ) && ! empty( $package['file'] ) && class_exists( '\MainWP\Dashboard\MainWP_System_Utility' ) ) {
+			// Generate a time-limited signed download URL via MainWP's native mechanism.
+			$package_url = \MainWP\Dashboard\MainWP_System_Utility::get_download_url( 'spfw', $package['file'] );
+		} elseif ( is_array( $package ) && ! empty( $package['url'] ) ) {
+			$package_url = $package['url'];
+		}
+
+		if ( '' === $package_url ) {
+			return array(
+				'ok'         => false,
+				'error_type' => 'no_package',
+				'message'    => __( 'No SPFW package URL is configured. Set one on the Extensions page first.', 'mainwp-simple-performance-for-wordpress' ),
+				'data'       => null,
+			);
 		}
 
 		$install_args = array(

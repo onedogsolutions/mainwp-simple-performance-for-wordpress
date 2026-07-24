@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.2.3
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,8 +32,9 @@ Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each
 * Per-site configuration — each child site has its own settings tab
 * Read current settings from child sites in real-time
 * Push setting changes to child sites via MainWP's secure signed channel
-* One-click install of SPFW from wordpress.org on any child site
+* One-click install of SPFW on any child site
 * Upload a custom SPFW ZIP or link to a self-hosted build for installation
+* Uploaded files stored securely and served via time-limited signed URLs
 * Bulk install SPFW on multiple sites at once
 * Status check — quickly see which optimizations are active on each site
 
@@ -65,6 +66,13 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 
 == Changelog ==
 
+= 1.3.0 =
+* Security: uploaded ZIPs now stored in MainWP's per-user directory (never publicly accessible).
+* Security: install uses time-limited, HMAC-signed download URLs (MainWP native mechanism).
+* Removed publicly-accessible wp-content/uploads/mwpspfw-packages/ directory.
+* Package form now supports dual-mode: uploaded file (priority) or external URL.
+* URL input disabled when a file is uploaded (mutual exclusivity).
+
 = 1.2.3 =
 * Fixed bulk install failure: MainWP Child expects a JSON-encoded 'url' parameter.
 * Added wp_json_encode() around the package URL to match native MainWP Dashboard behavior.
@@ -94,6 +102,9 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Security improvement: uploaded packages now served via signed URLs, no longer publicly accessible.
 
 = 1.2.3 =
 Critical fix: bulk install now correctly JSON-encodes the package URL for MainWP Child.

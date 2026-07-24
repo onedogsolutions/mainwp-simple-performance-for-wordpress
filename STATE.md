@@ -5,7 +5,102 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-## Current Phase: Phase 5 (JSON-encode url parameter, v1.2.3)
+# Current Phase: Phase 6 (Native secure downloads, v1.3.0)
+
+Replaced the publicly-accessible uploaded-file storage with MainWP's native
+signed download URL mechanism. Uploaded ZIPs are now stored in MainWP's
+per-user directory and served exclusively via time-limited, HMAC-signed URLs
+generated at install time — eliminating the publicly-accessible
+`wp-content/uploads/mwpspfw-packages/` directory entirely.
+
+### Discovery: MainWP 6.1.4 Native File Uploader Evaluation
+
+Evaluated whether to replace our custom drag-and-drop uploader with MainWP's
+native file uploader (shipped in the core plugin). Findings from dissecting
+`mainwp.6.1.4.zip`:
+
+**Native uploader architecture** (files examined):
+- `pages/page-mainwp-install-bulk.php` — `MainWP_Install_Bulk` class
+- `class/class-mainwp-qq2-file-uploader.php` — `MainWP_QQ2_File_Uploader`
+- `class/class-mainwp-qq2-uploaded-file-form.php` — form-based upload handler
+- `class/class-mainwp-post-plugin-theme-handler.php` — AJAX action routing
+- `assets/js/mainwp.js` (lines 2820–3048) — bulk upload JS flow
+- `class/class-mainwp-system-utility.php` — `get_download_url()`,
+  `get_download_sig()`, `get_mainwp_specific_dir()`
+
+**Native flow**: Upload ZIP via Dropzone.js → stored in
+`wp-content/uploads/mainwp/{uid}/bulk/` → `prepare_upload()` generates signed
+download URLs (`admin_url('?sig=<hmac>&mwpdl=<path>')`, validated via 3-hour
+site transient) → `perform_upload()` sends signed URL to child via
+`installplugintheme` → child downloads from dashboard → `clean_upload()`
+deletes temp files.
+
+**Why NOT hooking into the native uploader UI**:
+1. **Not componentized**: The native Dropzone is inline page-specific markup
+   with hardcoded element IDs (`#mainwp-dropzone-upload`, `#mainwp-file-uploader`)
+   and inline `<script>` blocks — not a reusable widget.
+2. **Incompatible lifecycle**: Native files are temporary (deleted after install
+   via `clean_upload()`). Our use case requires a persistent package that
+   survives across multiple install operations.
+3. **Coupled site selection**: The native flow is tightly coupled to the Install
+   Plugins/Themes page's groups/clients/sites checkboxes.
+4. **No external URL support**: The native uploader only handles file uploads,
+   not self-hosted ZIP URLs (update servers).
+5. **Extra dependencies**: Would require jQuery + Dropzone.js (our JS is
+   deliberately dependency-free plain JS).
+
+**What we DID adopt**: The native **secure download URL mechanism**
+(`MainWP_System_Utility::get_download_url()` / `get_download_sig()`).
+This generates time-limited, HMAC-signed URLs validated via site transients
+(3-hour window). Files are served through WordPress, never directly accessible.
+This is significantly more secure than our previous approach of storing files
+in a publicly-accessible uploads directory with only `.htaccess` protection.
+
+### Phase 6 Modifications (v1.3.0)
+
+- **`class-mwpspfw-overview.php` — `ajax_upload_package()`**: Now stores
+  uploaded ZIPs in MainWP's per-user directory via
+  `MainWP_System_Utility::get_mainwp_specific_dir('spfw')` (resolves to
+  `wp-content/uploads/mainwp/{uid}/spfw/`). Returns the filename (not a public
+  URL). Persists `array('file' => $filename)` in the `mwpspfw_package` option.
+  Removed manual `.htaccess`/`index.php` guard creation (MainWP's directory
+  structure handles this). Added `class_exists` guard for `MainWP_System_Utility`.
+- **`class-mwpspfw-overview.php` — `ajax_save_package()`**: Now supports
+  dual-mode: accepts either a `file` parameter (uploaded ZIP) or a `url`
+  parameter (external self-hosted ZIP). File mode takes priority.
+- **`class-mwpspfw-overview.php` — `render_page()`**: Added hidden `file` input
+  to the package form. Dropzone preview shows the stored filename on page load.
+  URL input is disabled when a file is uploaded (mutual exclusivity). Added
+  description: "Uploaded files are stored securely and served via time-limited
+  signed URLs at install time."
+- **`class-mwpspfw-overview.php` — `get_package()`**: Now returns both `url`
+  and `file` keys from the `mwpspfw_package` option.
+- **`class-mwpspfw-connector.php` — `install_package()`**: Priority logic:
+  if `package['file']` exists and `MainWP_System_Utility` is available,
+  generates a fresh signed download URL via `get_download_url('spfw', $file)`.
+  Falls back to `package['url']` for external ZIPs. The signed URL is valid for
+  3 hours (more than sufficient for the install operation).
+- **`assets/js/mwpspfw-admin.js` — `initPackageForm()`**: Added `setFileMode()`
+  toggle (disables/clears URL input when file is active). `resetDropzone()` now
+  clears the hidden file field and re-enables URL mode. Upload success handler
+  stores the filename in the hidden field (not a URL). Initializes file mode on
+  page load if a file is already configured.
+- **`assets/css/mwpspfw-admin.css`**: Added `#mwpspfw-package-url:disabled`
+  style (opacity + not-allowed cursor).
+- Version bumped to 1.3.0 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog).
+
+### Security Improvement
+
+| Before (v1.2.x) | After (v1.3.0) |
+|---|---|
+| Files in `wp-content/uploads/mwpspfw-packages/` | Files in `wp-content/uploads/mainwp/{uid}/spfw/` |
+| Publicly accessible URL (`.htaccess` only guard) | Never publicly accessible |
+| URL persisted indefinitely in option | Signed URL generated on-demand, expires in 3h |
+| No HMAC validation | HMAC + site transient validation |
+| Manual `.htaccess`/`index.php` guards | MainWP's own directory protection |
+
+## Historical Phase: Phase 5 (JSON-encode url parameter, v1.2.3)
 
 Fixed bulk install failure caused by sending a raw URL string to MainWP Child's
 `installplugintheme` callable. The child handler calls `json_decode()` on the
@@ -214,6 +309,8 @@ Fomantic UI chrome and the settings form is plain inputs). Namespace
   available on wordpress.org, so the install mechanism uses MainWP's slug-based
   install instead of a custom ZIP URL. This eliminated the entire package
   upload/URL setting UI.
+  *(Superseded in Phase 2/6: SPFW is NOT on wordpress.org; a custom package
+  upload + signed URL system was added.)*
 - **Grouped settings structure.** SPFW uses nested groups
   (`array('core' => array(...), 'restapi' => array(...))`) vs GSWP's flat
   keys. Solved with `flatten()`/`nest()` helpers and dot-notation keys
@@ -251,6 +348,12 @@ callbacks so all validation stays single-source.
   install works on sites without SPFW.
 
 ## Historical Phases
+
+### Phase 5 (JSON-encode url parameter, v1.2.3)
+
+Fixed bulk install failure caused by sending a raw URL string to MainWP Child's
+`installplugintheme` callable. See the Phase 5 Modifications section above for
+full details.
 
 ### Phase 4 (Critical install fix, v1.2.1)
 

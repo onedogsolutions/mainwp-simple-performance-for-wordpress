@@ -463,8 +463,9 @@
 
 		var status     = $( '#mwpspfw-package-status' );
 		var urlInput   = $( '#mwpspfw-package-url' );
-		var dropzone   = $( '#mwpspfw-dropzone' );
 		var fileInput  = $( '#mwpspfw-file-input' );
+		var fileHidden = $( '#mwpspfw-package-file' );
+		var dropzone   = $( '#mwpspfw-dropzone' );
 		var selectBtn  = $( '#mwpspfw-select-file-btn' );
 		var prompt     = $( '#mwpspfw-dropzone-prompt' );
 		var preview    = $( '#mwpspfw-dropzone-preview' );
@@ -500,6 +501,16 @@
 			}
 		}
 
+		function setFileMode( active ) {
+			// When a file is uploaded, disable the URL input (file takes priority).
+			if ( urlInput ) {
+				urlInput.disabled = active;
+				if ( active ) {
+					urlInput.value = '';
+				}
+			}
+		}
+
 		function resetDropzone() {
 			if ( preview ) {
 				preview.hidden = true;
@@ -510,6 +521,10 @@
 			if ( fileInput ) {
 				fileInput.value = '';
 			}
+			if ( fileHidden ) {
+				fileHidden.value = '';
+			}
+			setFileMode( false );
 			clearError();
 		}
 
@@ -552,12 +567,13 @@
 				} )
 				.then( function ( response ) {
 					if ( response && response.success ) {
-						if ( urlInput ) {
-							urlInput.value = response.data.url;
+						if ( fileHidden ) {
+							fileHidden.value = response.data.file;
 						}
 						if ( filenameEl ) {
 							filenameEl.textContent = response.data.filename || file.name;
 						}
+						setFileMode( true );
 					} else {
 						var msg = ( response && response.data && response.data.message ) || admin.uploadError;
 						showError( msg );
@@ -587,7 +603,7 @@
 			} );
 		}
 
-		// Remove button resets the zone.
+		// Remove button resets the zone and re-enables URL mode.
 		if ( removeBtn ) {
 			removeBtn.addEventListener( 'click', function () {
 				resetDropzone();
@@ -637,7 +653,12 @@
 			} );
 		}
 
-		// Save package URL form.
+		// Initialize file mode state on page load.
+		if ( fileHidden && fileHidden.value ) {
+			setFileMode( true );
+		}
+
+		// Save package form.
 		form.addEventListener( 'submit', function ( e ) {
 			e.preventDefault();
 

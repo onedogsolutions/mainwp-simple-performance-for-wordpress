@@ -66,10 +66,11 @@ class MWPSPFW_Overview {
 			<div class="ui segment">
 				<h3 class="ui header"><?php esc_html_e( 'SPFW Plugin Package', 'mainwp-simple-performance-for-wordpress' ); ?></h3>
 				<p>
-					<?php esc_html_e( 'Used by the "Install SPFW" button below to install or update Simple Performance for WordPress on a child site. By default, installs from wordpress.org. To use a custom build or a specific version, upload a ZIP here or link to one hosted on your own server.', 'mainwp-simple-performance-for-wordpress' ); ?>
+					<?php esc_html_e( 'Used by the "Install SPFW" button below to install or update Simple Performance for WordPress on a child site. SPFW is not distributed on wordpress.org, so point this at a ZIP file — upload one here or link to one hosted on your own update server.', 'mainwp-simple-performance-for-wordpress' ); ?>
 				</p>
 				<form id="mwpspfw-package-form" class="ui form">
 					<input type="hidden" name="action" value="mwpspfw_save_package" />
+					<input type="hidden" name="file" id="mwpspfw-package-file" value="<?php echo esc_attr( $package['file'] ); ?>" />
 					<?php wp_nonce_field( 'mwpspfw_save_package', 'nonce' ); ?>
 
 					<!-- Drag-and-drop file upload zone -->
@@ -84,7 +85,7 @@ class MWPSPFW_Overview {
 								aria-label="<?php esc_attr_e( 'Upload ZIP file', 'mainwp-simple-performance-for-wordpress' ); ?>"
 							/>
 							<!-- Empty state: prompt -->
-							<div class="mwpspfw-dropzone-prompt" id="mwpspfw-dropzone-prompt">
+							<div class="mwpspfw-dropzone-prompt" id="mwpspfw-dropzone-prompt"<?php echo $package['file'] ? ' hidden' : ''; ?>>
 								<span class="mwpspfw-dropzone-icon" aria-hidden="true">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
 								</span>
@@ -95,12 +96,13 @@ class MWPSPFW_Overview {
 								</button>
 							</div>
 							<!-- Filled state: file preview -->
-							<div class="mwpspfw-dropzone-preview" id="mwpspfw-dropzone-preview" hidden>
-								<span class="mwpspfw-dropzone-filename" id="mwpspfw-dropzone-filename"></span>
+							<div class="mwpspfw-dropzone-preview" id="mwpspfw-dropzone-preview"<?php echo $package['file'] ? '' : ' hidden'; ?>>
+								<span class="mwpspfw-dropzone-filename" id="mwpspfw-dropzone-filename"><?php echo esc_html( $package['file'] ); ?></span>
 								<button type="button" class="mwpspfw-dropzone-remove" id="mwpspfw-dropzone-remove" aria-label="<?php esc_attr_e( 'Remove file', 'mainwp-simple-performance-for-wordpress' ); ?>" title="<?php esc_attr_e( 'Remove file', 'mainwp-simple-performance-for-wordpress' ); ?>">&times;</button>
 							</div>
 						</div>
 						<div class="mwpspfw-dropzone-error" id="mwpspfw-dropzone-error" role="alert" hidden></div>
+						<p class="mwpspfw-field-description"><?php esc_html_e( 'Uploaded files are stored securely and served via time-limited signed URLs at install time.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
 					</div>
 
 					<div class="field">
@@ -112,9 +114,10 @@ class MWPSPFW_Overview {
 								name="url"
 								value="<?php echo esc_attr( $package['url'] ); ?>"
 								placeholder="https://example.com/simple-performance-for-wordpress.zip"
+								<?php echo $package['file'] ? 'disabled' : ''; ?>
 							/>
 						</div>
-						<p class="mwpspfw-field-description"><?php esc_html_e( 'Populated automatically when you upload a file above, or enter a URL to a ZIP hosted on your own server. Leave empty to install from wordpress.org.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+						<p class="mwpspfw-field-description"><?php esc_html_e( 'Enter a URL to a ZIP hosted on your own update server. Disabled when a file is uploaded above.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
 					</div>
 
 					<button type="submit" class="ui primary button">
@@ -229,19 +232,23 @@ class MWPSPFW_Overview {
 	}
 
 	/**
-	 * The configured SPFW package (currently just a ZIP URL).
+	 * The configured SPFW package (uploaded file or external ZIP URL).
 	 *
-	 * @return array{url:string}
+	 * @return array{url:string,file:string}
 	 */
 	private function get_package() {
 		$package = get_option( 'mwpspfw_package', array() );
 		return array(
-			'url' => is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '',
+			'url'  => is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '',
+			'file' => is_array( $package ) && ! empty( $package['file'] ) ? $package['file'] : '',
 		);
 	}
 
 	/**
-	 * AJAX handler: save the SPFW package URL used by the Install button.
+	 * AJAX handler: save the SPFW package configuration used by the Install
+	 * button. Supports two modes: an external URL (self-hosted ZIP) or a
+	 * previously uploaded file (stored in MainWP's directory, served via
+	 * signed URLs at install time).
 	 */
 	public function ajax_save_package() {
 		check_ajax_referer( 'mwpspfw_save_package', 'nonce' );
@@ -250,22 +257,34 @@ class MWPSPFW_Overview {
 			wp_send_json_error( array( 'message' => __( 'You do not have permission to manage plugin packages.', 'mainwp-simple-performance-for-wordpress' ) ) );
 		}
 
-		$url = isset( $_POST['url'] ) ? esc_url_raw( wp_unslash( $_POST['url'] ) ) : '';
-		update_option( 'mwpspfw_package', array( 'url' => $url ) );
+		$url  = isset( $_POST['url'] ) ? esc_url_raw( wp_unslash( $_POST['url'] ) ) : '';
+		$file = isset( $_POST['file'] ) ? sanitize_file_name( wp_unslash( $_POST['file'] ) ) : '';
 
-		wp_send_json_success( array( 'url' => $url ) );
+		if ( ! empty( $file ) ) {
+			// File mode: uploaded ZIP stored in MainWP's directory.
+			update_option( 'mwpspfw_package', array( 'file' => $file ) );
+		} else {
+			// URL mode: external self-hosted ZIP.
+			update_option( 'mwpspfw_package', array( 'url' => $url ) );
+		}
+
+		wp_send_json_success( array( 'url' => $url, 'file' => $file ) );
 	}
 
 	/**
-	 * AJAX handler: receive a ZIP file upload, store it in the WordPress
-	 * uploads directory, and return its URL. Used by the drag-and-drop zone
-	 * on the Extensions page.
+	 * AJAX handler: receive a ZIP file upload, store it in MainWP's per-user
+	 * directory (served via signed URLs, never publicly accessible), and return
+	 * the filename. Used by the drag-and-drop zone on the Extensions page.
 	 */
 	public function ajax_upload_package() {
 		check_ajax_referer( 'mwpspfw_upload_package', 'nonce' );
 
 		if ( ! current_user_can( 'upload_files' ) || ! current_user_can( 'install_plugins' ) ) {
 			wp_send_json_error( array( 'message' => __( 'You do not have permission to upload plugin packages.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		if ( ! class_exists( '\MainWP\Dashboard\MainWP_System_Utility' ) ) {
+			wp_send_json_error( array( 'message' => __( 'MainWP core is not active.', 'mainwp-simple-performance-for-wordpress' ) ) );
 		}
 
 		if ( empty( $_FILES['file'] ) ) {
@@ -292,37 +311,25 @@ class MWPSPFW_Overview {
 			wp_send_json_error( array( 'message' => __( 'Upload failed. Please try again.', 'mainwp-simple-performance-for-wordpress' ) ) );
 		}
 
-		// Store in wp-content/uploads/mwpspfw-packages/.
-		$upload_dir = wp_upload_dir();
-		$target_dir = trailingslashit( $upload_dir['basedir'] ) . 'mwpspfw-packages';
-
-		if ( ! file_exists( $target_dir ) ) {
-			wp_mkdir_p( $target_dir );
-		}
-
-		// Prevent direct PHP execution inside the package directory.
-		$htaccess = $target_dir . '/.htaccess';
-		if ( ! file_exists( $htaccess ) ) {
-			file_put_contents( $htaccess, 'Deny from all' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-		}
-		$index = $target_dir . '/index.php';
-		if ( ! file_exists( $index ) ) {
-			file_put_contents( $index, '<?php // Silence is golden.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-		}
+		// Store in MainWP's per-user directory (wp-content/uploads/mainwp/{uid}/spfw/).
+		// This directory is protected by MainWP's own .htaccess rules and files
+		// are served exclusively via time-limited signed download URLs.
+		$target_dir = \MainWP\Dashboard\MainWP_System_Utility::get_mainwp_specific_dir( 'spfw' );
 
 		// Unique filename to avoid collisions.
 		$unique_name = 'spfw-' . gmdate( 'Ymd-His' ) . '-' . wp_generate_password( 6, false ) . '.zip';
-		$target_path = $target_dir . '/' . $unique_name;
+		$target_path = $target_dir . $unique_name;
 
 		if ( ! move_uploaded_file( $file['tmp_name'], $target_path ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 			wp_send_json_error( array( 'message' => __( 'Could not save the uploaded file.', 'mainwp-simple-performance-for-wordpress' ) ) );
 		}
 
-		$url = trailingslashit( $upload_dir['baseurl'] ) . 'mwpspfw-packages/' . $unique_name;
+		// Persist the filename in the package option (signed URL generated at install time).
+		update_option( 'mwpspfw_package', array( 'file' => $unique_name ) );
 
 		wp_send_json_success(
 			array(
-				'url'      => $url,
+				'file'     => $unique_name,
 				'filename' => $filename,
 			)
 		);
@@ -379,8 +386,8 @@ class MWPSPFW_Overview {
 
 	/**
 	 * AJAX handler backing the "Install SPFW" button: installs/upgrades SPFW
-	 * on the child site from wordpress.org via MainWP's standard plugin-install
-	 * mechanism.
+	 * on the child site from the configured package URL via MainWP's standard
+	 * plugin-install mechanism.
 	 */
 	public function ajax_install() {
 		check_ajax_referer( 'mwpspfw_install_spfw', 'nonce' );
