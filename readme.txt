@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -33,6 +33,7 @@ Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each
 * Read current settings from child sites in real-time
 * Push setting changes to child sites via MainWP's secure signed channel
 * One-click install of SPFW from wordpress.org on any child site
+* Upload a custom SPFW ZIP or link to a self-hosted build for installation
 * Bulk install SPFW on multiple sites at once
 * Status check — quickly see which optimizations are active on each site
 
@@ -64,6 +65,11 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 
 == Changelog ==
 
+= 1.1.0 =
+* Added drag-and-drop ZIP upload for custom SPFW builds.
+* Added package URL setting for self-hosted plugin ZIPs.
+* Install button now uses configured package URL, falls back to wordpress.org.
+
 = 1.0.0 =
 * Initial release.
 * Per-site configuration tab with five settings groups.
@@ -72,6 +78,9 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+Adds drag-and-drop ZIP upload for custom SPFW builds and self-hosted package URL support.
 
 = 1.0.0 =
 Initial release.

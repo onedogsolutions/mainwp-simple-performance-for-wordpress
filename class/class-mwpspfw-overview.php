@@ -4,8 +4,9 @@
  *
  * A thin index, not a second configurator: lists connected child sites with a
  * link to each one's own "Performance" tab (the actual configuration screen),
- * an optional per-row status check, and a one-click "Install SPFW" using
- * MainWP's standard wordpress.org plugin-install mechanism.
+ * an optional per-row status check, a one-click "Install SPFW" using MainWP's
+ * standard plugin-install mechanism, and the package URL setting that button
+ * installs (with drag-and-drop ZIP upload).
  *
  * @package MainWP/Extensions/SPFW
  */
@@ -43,7 +44,7 @@ class MWPSPFW_Overview {
 	}
 
 	/**
-	 * Render the overview screen: the site table with per-site actions.
+	 * Render the overview screen: the package-URL setting, then the site table.
 	 *
 	 * Markup uses MainWP's own Fomantic UI classes (ui segment/table/form)
 	 * rather than wp-admin's, so the screen inherits MainWP's light/dark theme
@@ -53,12 +54,74 @@ class MWPSPFW_Overview {
 	public function render_page() {
 		MWPSPFW_Admin::enqueue_assets();
 
-		$sites = $this->get_sites();
+		$sites   = $this->get_sites();
+		$package = $this->get_package();
 		?>
 		<div class="ui segment">
 			<h2 class="ui header"><?php esc_html_e( 'Simple Performance for WordPress', 'mainwp-simple-performance-for-wordpress' ); ?></h2>
 			<div class="ui info message">
 				<?php esc_html_e( 'Performance settings are configured per site. Use "Configure" to open a site\'s settings tab.', 'mainwp-simple-performance-for-wordpress' ); ?>
+			</div>
+
+			<div class="ui segment">
+				<h3 class="ui header"><?php esc_html_e( 'SPFW Plugin Package', 'mainwp-simple-performance-for-wordpress' ); ?></h3>
+				<p>
+					<?php esc_html_e( 'Used by the "Install SPFW" button below to install or update Simple Performance for WordPress on a child site. By default, installs from wordpress.org. To use a custom build or a specific version, upload a ZIP here or link to one hosted on your own server.', 'mainwp-simple-performance-for-wordpress' ); ?>
+				</p>
+				<form id="mwpspfw-package-form" class="ui form">
+					<input type="hidden" name="action" value="mwpspfw_save_package" />
+					<?php wp_nonce_field( 'mwpspfw_save_package', 'nonce' ); ?>
+
+					<!-- Drag-and-drop file upload zone -->
+					<div class="field">
+						<label><?php esc_html_e( 'Upload Plugin ZIP', 'mainwp-simple-performance-for-wordpress' ); ?></label>
+						<div class="mwpspfw-dropzone" id="mwpspfw-dropzone">
+							<input
+								type="file"
+								id="mwpspfw-file-input"
+								accept=".zip,application/zip"
+								class="mwpspfw-dropzone-input"
+								aria-label="<?php esc_attr_e( 'Upload ZIP file', 'mainwp-simple-performance-for-wordpress' ); ?>"
+							/>
+							<!-- Empty state: prompt -->
+							<div class="mwpspfw-dropzone-prompt" id="mwpspfw-dropzone-prompt">
+								<span class="mwpspfw-dropzone-icon" aria-hidden="true">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+								</span>
+								<p class="mwpspfw-dropzone-title"><?php esc_html_e( 'Drop your ZIP here', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+								<p class="mwpspfw-dropzone-hint"><?php esc_html_e( 'ZIP only (max. 10 MB)', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+								<button type="button" class="ui button" id="mwpspfw-select-file-btn">
+									<?php esc_html_e( 'Select file', 'mainwp-simple-performance-for-wordpress' ); ?>
+								</button>
+							</div>
+							<!-- Filled state: file preview -->
+							<div class="mwpspfw-dropzone-preview" id="mwpspfw-dropzone-preview" hidden>
+								<span class="mwpspfw-dropzone-filename" id="mwpspfw-dropzone-filename"></span>
+								<button type="button" class="mwpspfw-dropzone-remove" id="mwpspfw-dropzone-remove" aria-label="<?php esc_attr_e( 'Remove file', 'mainwp-simple-performance-for-wordpress' ); ?>" title="<?php esc_attr_e( 'Remove file', 'mainwp-simple-performance-for-wordpress' ); ?>">&times;</button>
+							</div>
+						</div>
+						<div class="mwpspfw-dropzone-error" id="mwpspfw-dropzone-error" role="alert" hidden></div>
+					</div>
+
+					<div class="field">
+						<label for="mwpspfw-package-url"><?php esc_html_e( 'Package ZIP URL', 'mainwp-simple-performance-for-wordpress' ); ?></label>
+						<div class="ui input">
+							<input
+								type="url"
+								id="mwpspfw-package-url"
+								name="url"
+								value="<?php echo esc_attr( $package['url'] ); ?>"
+								placeholder="https://example.com/simple-performance-for-wordpress.zip"
+							/>
+						</div>
+						<p class="mwpspfw-field-description"><?php esc_html_e( 'Populated automatically when you upload a file above, or enter a URL to a ZIP hosted on your own server. Leave empty to install from wordpress.org.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+					</div>
+
+					<button type="submit" class="ui primary button">
+						<?php esc_html_e( 'Save Package', 'mainwp-simple-performance-for-wordpress' ); ?>
+					</button>
+					<span id="mwpspfw-package-status" class="mwpspfw-save-status"></span>
+				</form>
 			</div>
 
 			<?php if ( empty( $sites ) ) : ?>
@@ -129,6 +192,9 @@ class MWPSPFW_Overview {
 	/**
 	 * Fetch every connected child site via MainWP's 'mainwp_getsites' filter.
 	 *
+	 * Returns a list of associative arrays (id, url, name, ...) — MainWP_DB::
+	 * get_sites() builds plain arrays, not objects, for every row.
+	 *
 	 * @return array<int,array<string,mixed>> Site rows, empty on failure.
 	 */
 	private function get_sites() {
@@ -143,6 +209,106 @@ class MWPSPFW_Overview {
 		);
 
 		return is_array( $sites ) ? $sites : array();
+	}
+
+	/**
+	 * The configured SPFW package (currently just a ZIP URL).
+	 *
+	 * @return array{url:string}
+	 */
+	private function get_package() {
+		$package = get_option( 'mwpspfw_package', array() );
+		return array(
+			'url' => is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '',
+		);
+	}
+
+	/**
+	 * AJAX handler: save the SPFW package URL used by the Install button.
+	 */
+	public function ajax_save_package() {
+		check_ajax_referer( 'mwpspfw_save_package', 'nonce' );
+
+		if ( ! current_user_can( 'install_plugins' ) ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to manage plugin packages.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$url = isset( $_POST['url'] ) ? esc_url_raw( wp_unslash( $_POST['url'] ) ) : '';
+		update_option( 'mwpspfw_package', array( 'url' => $url ) );
+
+		wp_send_json_success( array( 'url' => $url ) );
+	}
+
+	/**
+	 * AJAX handler: receive a ZIP file upload, store it in the WordPress
+	 * uploads directory, and return its URL. Used by the drag-and-drop zone
+	 * on the Extensions page.
+	 */
+	public function ajax_upload_package() {
+		check_ajax_referer( 'mwpspfw_upload_package', 'nonce' );
+
+		if ( ! current_user_can( 'upload_files' ) || ! current_user_can( 'install_plugins' ) ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to upload plugin packages.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		if ( empty( $_FILES['file'] ) ) {
+			wp_send_json_error( array( 'message' => __( 'No file was uploaded.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$file = $_FILES['file']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- validated below.
+
+		// Validate extension.
+		$filename = sanitize_file_name( $file['name'] );
+		$ext      = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+		if ( 'zip' !== $ext ) {
+			wp_send_json_error( array( 'message' => __( 'Only ZIP files are accepted.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		// Validate size (10 MB max).
+		$max_size = 10 * 1024 * 1024;
+		if ( (int) $file['size'] > $max_size ) {
+			wp_send_json_error( array( 'message' => __( 'File exceeds the maximum size of 10 MB.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		// Validate upload error.
+		if ( UPLOAD_ERR_OK !== (int) $file['error'] ) {
+			wp_send_json_error( array( 'message' => __( 'Upload failed. Please try again.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		// Store in wp-content/uploads/mwpspfw-packages/.
+		$upload_dir = wp_upload_dir();
+		$target_dir = trailingslashit( $upload_dir['basedir'] ) . 'mwpspfw-packages';
+
+		if ( ! file_exists( $target_dir ) ) {
+			wp_mkdir_p( $target_dir );
+		}
+
+		// Prevent direct PHP execution inside the package directory.
+		$htaccess = $target_dir . '/.htaccess';
+		if ( ! file_exists( $htaccess ) ) {
+			file_put_contents( $htaccess, 'Deny from all' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		}
+		$index = $target_dir . '/index.php';
+		if ( ! file_exists( $index ) ) {
+			file_put_contents( $index, '<?php // Silence is golden.' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		}
+
+		// Unique filename to avoid collisions.
+		$unique_name = 'spfw-' . gmdate( 'Ymd-His' ) . '-' . wp_generate_password( 6, false ) . '.zip';
+		$target_path = $target_dir . '/' . $unique_name;
+
+		if ( ! move_uploaded_file( $file['tmp_name'], $target_path ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			wp_send_json_error( array( 'message' => __( 'Could not save the uploaded file.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$url = trailingslashit( $upload_dir['baseurl'] ) . 'mwpspfw-packages/' . $unique_name;
+
+		wp_send_json_success(
+			array(
+				'url'      => $url,
+				'filename' => $filename,
+			)
+		);
 	}
 
 	/**

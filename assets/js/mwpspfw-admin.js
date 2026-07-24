@@ -425,6 +425,210 @@
 		updateBulkUI();
 	}
 
+	/* ─── Overview: Package form with drag-and-drop upload ────────────────── */
+
+	function initPackageForm() {
+		var form = $( '#mwpspfw-package-form' );
+		if ( ! form ) {
+			return;
+		}
+
+		var status     = $( '#mwpspfw-package-status' );
+		var urlInput   = $( '#mwpspfw-package-url' );
+		var dropzone   = $( '#mwpspfw-dropzone' );
+		var fileInput  = $( '#mwpspfw-file-input' );
+		var selectBtn  = $( '#mwpspfw-select-file-btn' );
+		var prompt     = $( '#mwpspfw-dropzone-prompt' );
+		var preview    = $( '#mwpspfw-dropzone-preview' );
+		var filenameEl = $( '#mwpspfw-dropzone-filename' );
+		var removeBtn  = $( '#mwpspfw-dropzone-remove' );
+		var errorEl    = $( '#mwpspfw-dropzone-error' );
+
+		var MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+
+		function showError( msg ) {
+			if ( errorEl ) {
+				errorEl.textContent = msg;
+				errorEl.hidden = false;
+			}
+		}
+
+		function clearError() {
+			if ( errorEl ) {
+				errorEl.textContent = '';
+				errorEl.hidden = true;
+			}
+		}
+
+		function showPreview( name ) {
+			if ( filenameEl ) {
+				filenameEl.textContent = name;
+			}
+			if ( prompt ) {
+				prompt.hidden = true;
+			}
+			if ( preview ) {
+				preview.hidden = false;
+			}
+		}
+
+		function resetDropzone() {
+			if ( preview ) {
+				preview.hidden = true;
+			}
+			if ( prompt ) {
+				prompt.hidden = false;
+			}
+			if ( fileInput ) {
+				fileInput.value = '';
+			}
+			clearError();
+		}
+
+		function validateFile( file ) {
+			var ext = file.name.split( '.' ).pop().toLowerCase();
+			if ( 'zip' !== ext ) {
+				showError( admin.invalidType );
+				return false;
+			}
+			if ( file.size > MAX_SIZE ) {
+				showError( admin.invalidSize );
+				return false;
+			}
+			return true;
+		}
+
+		function uploadFile( file ) {
+			if ( ! validateFile( file ) ) {
+				return;
+			}
+
+			clearError();
+			showPreview( file.name );
+			if ( filenameEl ) {
+				filenameEl.textContent = admin.uploading;
+			}
+
+			var formData = new FormData();
+			formData.append( 'action', 'mwpspfw_upload_package' );
+			formData.append( 'nonce', admin.uploadNonce );
+			formData.append( 'file', file );
+
+			fetch( admin.ajaxUrl, {
+				method: 'POST',
+				credentials: 'same-origin',
+				body: formData,
+			} )
+				.then( function ( response ) {
+					return response.json();
+				} )
+				.then( function ( response ) {
+					if ( response && response.success ) {
+						if ( urlInput ) {
+							urlInput.value = response.data.url;
+						}
+						if ( filenameEl ) {
+							filenameEl.textContent = response.data.filename || file.name;
+						}
+					} else {
+						var msg = ( response && response.data && response.data.message ) || admin.uploadError;
+						showError( msg );
+						resetDropzone();
+					}
+				} )
+				.catch( function () {
+					showError( admin.uploadError );
+					resetDropzone();
+				} );
+		}
+
+		// "Select file" button opens the file dialog.
+		if ( selectBtn && fileInput ) {
+			selectBtn.addEventListener( 'click', function ( e ) {
+				e.preventDefault();
+				fileInput.click();
+			} );
+		}
+
+		// File input change.
+		if ( fileInput ) {
+			fileInput.addEventListener( 'change', function () {
+				if ( fileInput.files && fileInput.files.length > 0 ) {
+					uploadFile( fileInput.files[ 0 ] );
+				}
+			} );
+		}
+
+		// Remove button resets the zone.
+		if ( removeBtn ) {
+			removeBtn.addEventListener( 'click', function () {
+				resetDropzone();
+			} );
+		}
+
+		// Drag-and-drop handlers.
+		if ( dropzone ) {
+			dropzone.addEventListener( 'dragenter', function ( e ) {
+				e.preventDefault();
+				e.stopPropagation();
+				dropzone.classList.add( 'mwpspfw-dropzone--dragging' );
+			} );
+
+			dropzone.addEventListener( 'dragover', function ( e ) {
+				e.preventDefault();
+				e.stopPropagation();
+			} );
+
+			dropzone.addEventListener( 'dragleave', function ( e ) {
+				e.preventDefault();
+				e.stopPropagation();
+				if ( dropzone.contains( e.relatedTarget ) ) {
+					return;
+				}
+				dropzone.classList.remove( 'mwpspfw-dropzone--dragging' );
+			} );
+
+			dropzone.addEventListener( 'drop', function ( e ) {
+				e.preventDefault();
+				e.stopPropagation();
+				dropzone.classList.remove( 'mwpspfw-dropzone--dragging' );
+
+				if ( e.dataTransfer.files && e.dataTransfer.files.length > 0 ) {
+					uploadFile( e.dataTransfer.files[ 0 ] );
+				}
+			} );
+
+			// Also allow clicking anywhere on the dropzone to open the file dialog.
+			dropzone.addEventListener( 'click', function ( e ) {
+				if ( e.target === selectBtn || ( selectBtn && selectBtn.contains( e.target ) ) || e.target === removeBtn || ( removeBtn && removeBtn.contains( e.target ) ) ) {
+					return;
+				}
+				if ( preview && preview.hidden && fileInput ) {
+					fileInput.click();
+				}
+			} );
+		}
+
+		// Save package URL form.
+		form.addEventListener( 'submit', function ( e ) {
+			e.preventDefault();
+
+			if ( status ) {
+				status.textContent = admin.saving;
+			}
+
+			var data = serialize( form );
+
+			ajaxPost( data, function ( response ) {
+				if ( status ) {
+					status.textContent = ( response && response.success )
+						? admin.saved
+						: ( ( response && response.data && response.data.message ) || admin.saveError );
+				}
+			} );
+		} );
+	}
+
 	/* ─── Init ────────────────────────────────────────────────────────────── */
 
 	function init() {
@@ -435,6 +639,7 @@
 		initCheckButtons();
 		initInstallButtons();
 		initBulkActions();
+		initPackageForm();
 	}
 
 	if ( 'loading' === document.readyState ) {

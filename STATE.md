@@ -5,7 +5,54 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-## Current Phase: Phase 1 (Initial implementation, v1.0.0)
+## Current Phase: Phase 2 (Drag-and-drop package upload, v1.1.0)
+
+Added a drag-and-drop ZIP upload feature to the Extensions-page overview,
+modeled on the sister project `mainwp-for-google-security-for-wordpress` Phase 8.
+Allows uploading a custom SPFW build or linking to a self-hosted ZIP for
+installation on child sites, with automatic fallback to wordpress.org when no
+package URL is configured.
+
+### Phase 2 Modifications (v1.1.0)
+
+- **Package form with drag-and-drop upload zone** in
+  `class-mwpspfw-overview.php`: a dashed-border container with an upload icon,
+  "Drop your ZIP here" prompt, file-type/size hint ("ZIP only, max. 10 MB"),
+  a "Select file" button, a file-preview row (filename + × remove button), and
+  a `role="alert"` error line. The URL input remains below (auto-populated on
+  successful upload, or manually entered for a self-hosted ZIP) with a helper
+  description explaining the wordpress.org fallback.
+- **New AJAX endpoint `mwpspfw_upload_package`**
+  (`MWPSPFW_Overview::ajax_upload_package()`): validates the upload (ZIP
+  extension, ≤ 10 MB, `UPLOAD_ERR_OK`), stores the file in
+  `wp-content/uploads/mwpspfw-packages/` with a unique timestamped name,
+  writes `.htaccess` (Deny from all) + `index.php` (silence) guards on first
+  use, and returns the public URL. Gated behind `upload_files` +
+  `install_plugins` capabilities and its own nonce.
+- **New AJAX endpoint `mwpspfw_save_package`**
+  (`MWPSPFW_Overview::ajax_save_package()`): saves the package URL to the
+  `mwpspfw_package` option. Gated behind `install_plugins` capability.
+- **`MWPSPFW_Connector::install_package()` updated**: now checks for a
+  configured package URL (`mwpspfw_package` option) and uses it if present;
+  otherwise falls back to the wordpress.org slug-based install. This allows
+  installing custom builds or specific versions while maintaining the
+  zero-config default behavior.
+- **`initPackageForm()` in `mwpspfw-admin.js`**: client-side validation
+  (extension + size), `FormData`/`fetch()` multipart upload, drag-enter/over/
+  leave/drop handlers with a `--dragging` visual state, click-anywhere-to-
+  browse (when no file is loaded), preview/remove toggle, inline error
+  display, and package URL form submission.
+- **New CSS** in `mwpspfw-admin.css`: drop-zone layout (flexbox centering,
+  min-height, dashed border, rounded corners), visually-hidden file input,
+  icon circle, prompt/preview states, remove button, error text. Layout-only,
+  no color values — inherits MainWP's Fomantic theme (light/dark).
+- **4 new localized strings** in `MWPSPFW_Admin::enqueue_assets()`:
+  `uploadNonce`, `packageNonce`, `uploading`, `uploadError`, `invalidType`,
+  `invalidSize`.
+- Version bumped to 1.1.0 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog).
+
+## Historical Phase: Phase 1 (Initial implementation, v1.0.0)
 
 Built the full dashboard-side extension modeled on the sister project
 `onedogsolutions/mainwp-for-google-security-for-wordpress`. Server-rendered PHP
@@ -133,4 +180,8 @@ callbacks so all validation stays single-source.
 
 ## Historical Phases
 
-(None — this is the initial release.)
+### Phase 1 (Initial implementation, v1.0.0)
+
+Built the full dashboard-side extension modeled on the sister project
+`onedogsolutions/mainwp-for-google-security-for-wordpress`. See the Phase 1
+Modifications section above for full details.

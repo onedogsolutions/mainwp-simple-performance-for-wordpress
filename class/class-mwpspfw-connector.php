@@ -58,7 +58,8 @@ class MWPSPFW_Connector {
 	/**
 	 * Install (or upgrade-in-place) Simple Performance for WordPress on a
 	 * child site using MainWP's standard 'installplugintheme' child callable.
-	 * SPFW is on wordpress.org, so we use the slug-based install.
+	 * Uses the configured package URL if set, otherwise falls back to the
+	 * wordpress.org slug-based install.
 	 *
 	 * @param int $site_id MainWP internal website ID.
 	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
@@ -66,18 +67,31 @@ class MWPSPFW_Connector {
 	public static function install_package( $site_id ) {
 		global $mwpspfw_activator;
 
+		// Check for a configured package URL; fall back to wordpress.org slug.
+		$package     = get_option( 'mwpspfw_package', array() );
+		$package_url = is_array( $package ) && ! empty( $package['url'] ) ? $package['url'] : '';
+
+		$install_args = array(
+			'type'           => 'plugin',
+			'activatePlugin' => 'yes',
+			'overwrite'      => true,
+		);
+
+		if ( ! empty( $package_url ) ) {
+			// Use the custom package URL (uploaded ZIP or self-hosted).
+			$install_args['url'] = $package_url;
+		} else {
+			// Fall back to wordpress.org slug-based install.
+			$install_args['slug'] = 'simple-performance-for-wordpress';
+		}
+
 		$response = apply_filters(
 			'mainwp_fetchurlauthed',
 			$mwpspfw_activator->get_child_file(),
 			$mwpspfw_activator->get_child_key(),
 			(int) $site_id,
 			'installplugintheme',
-			array(
-				'type'           => 'plugin',
-				'slug'           => 'simple-performance-for-wordpress',
-				'activatePlugin' => 'yes',
-				'overwrite'      => true,
-			)
+			$install_args
 		);
 
 		if ( self::is_transport_failure( $response ) ) {

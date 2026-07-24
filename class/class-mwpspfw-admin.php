@@ -54,6 +54,8 @@ class MWPSPFW_Admin {
 	public function __construct() {
 		add_action( 'wp_ajax_mwpspfw_save_settings', array( MWPSPFW_Individual::get_instance(), 'ajax_save' ) );
 		add_action( 'wp_ajax_mwpspfw_check_site', array( MWPSPFW_Overview::get_instance(), 'ajax_check' ) );
+		add_action( 'wp_ajax_mwpspfw_save_package', array( MWPSPFW_Overview::get_instance(), 'ajax_save_package' ) );
+		add_action( 'wp_ajax_mwpspfw_upload_package', array( MWPSPFW_Overview::get_instance(), 'ajax_upload_package' ) );
 		add_action( 'wp_ajax_mwpspfw_install_spfw', array( MWPSPFW_Overview::get_instance(), 'ajax_install' ) );
 	}
 
@@ -90,6 +92,8 @@ class MWPSPFW_Admin {
 				'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
 				'saveNonce'      => wp_create_nonce( 'mwpspfw_save_settings' ),
 				'checkNonce'     => wp_create_nonce( 'mwpspfw_check_site' ),
+				'packageNonce'   => wp_create_nonce( 'mwpspfw_save_package' ),
+				'uploadNonce'    => wp_create_nonce( 'mwpspfw_upload_package' ),
 				'installNonce'   => wp_create_nonce( 'mwpspfw_install_spfw' ),
 				'confirmUnsaved' => __( 'You have unsaved changes. Leave this page anyway?', 'mainwp-simple-performance-for-wordpress' ),
 				'confirmInstall' => __( 'Install (or reinstall/upgrade) Simple Performance for WordPress on this site now?', 'mainwp-simple-performance-for-wordpress' ),
@@ -99,6 +103,10 @@ class MWPSPFW_Admin {
 				'checking'       => __( 'Checking…', 'mainwp-simple-performance-for-wordpress' ),
 				'installing'     => __( 'Installing…', 'mainwp-simple-performance-for-wordpress' ),
 				'installed'      => __( 'Installed.', 'mainwp-simple-performance-for-wordpress' ),
+				'uploading'      => __( 'Uploading…', 'mainwp-simple-performance-for-wordpress' ),
+				'uploadError'    => __( 'Upload failed.', 'mainwp-simple-performance-for-wordpress' ),
+				'invalidType'    => __( 'Only ZIP files are accepted.', 'mainwp-simple-performance-for-wordpress' ),
+				'invalidSize'    => __( 'File exceeds the maximum size of 10 MB.', 'mainwp-simple-performance-for-wordpress' ),
 				'bulkConfirm'    => __( 'Install (or reinstall/upgrade) Simple Performance for WordPress on the selected sites now?', 'mainwp-simple-performance-for-wordpress' ),
 				'bulkInstalling' => __( 'Installing %1$d of %2$d…', 'mainwp-simple-performance-for-wordpress' ),
 				'bulkDone'       => __( 'Bulk install complete: %1$d succeeded, %2$d failed.', 'mainwp-simple-performance-for-wordpress' ),
