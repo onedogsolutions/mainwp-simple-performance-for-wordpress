@@ -29,7 +29,7 @@ class MWPSPFW_Connector {
 	 *
 	 * @var string
 	 */
-	const MIN_SPFW_VERSION = '1.8.0';
+	const MIN_SPFW_VERSION = '2.1.0';
 
 	/**
 	 * Fetch the current SPFW settings from a child site.

@@ -5,7 +5,77 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-# Current Phase: Phase 6 (Native secure downloads, v1.3.0)
+# Current Phase: Phase 7 (Schema alignment with SPFW v2.1.0, v1.4.0)
+
+Aligned the MainWP extension's settings schema with the child plugin (SPFW
+v2.1.0). The child plugin had accumulated 17 new field definitions and
+renamed/moved 3 existing fields across versions 1.13.0–2.1.0. The old schema
+silently lost data for heartbeat settings (key mismatch) and could not
+configure any of the new toggles remotely.
+
+### Phase 7 Modifications (v1.4.0)
+
+- **`class-mwpspfw-settings-schema.php` — Core tab renames:**
+  `heartbeat_mode` → `heartbeat_control` (select: default/disable/allow_posts)
+  and `heartbeat_interval` → `heartbeat_frequency` (select: 0/15/30/60/120,
+  was `int`). The child plugin renamed these in Step 10 (v1.0.0 release, but
+  the field keys changed post-1.0.0 when heartbeat was reworked). The old keys
+  caused saves to silently lose heartbeat configuration because the child's
+  `SPFW_Settings::update()` didn't recognize them.
+- **`class-mwpspfw-settings-schema.php` — Core tab, removed field:**
+  `disable_xmlrpc` removed from Core (moved to Hardening group in child v2.0.2,
+  where it now sits alongside the server-level `block_xmlrpc_file` toggle).
+- **`class-mwpspfw-settings-schema.php` — Core tab, 11 new fields added:**
+  `disable_google_maps` (toggle) + `google_maps_exceptions` (route_list,
+  conditional), `disable_password_meter` (toggle), `disable_comments` (toggle)
+  + `remove_comment_urls` (toggle, conditional on comments enabled),
+  `blank_favicon` (toggle), `disable_block_css` (toggle) +
+  `block_css_smart_mode` (toggle, conditional), `streamline_dashboard`
+  (toggle), `disable_wp_sitemaps` (toggle),
+  `remove_robots_max_image_preview` (toggle). All default off (opt-in),
+  matching the child plugin's safe defaults.
+- **`class-mwpspfw-settings-schema.php` — Hardening tab, 6 new fields added:**
+  `disable_xmlrpc` (toggle, default on — moved from Core, child defaults it
+  ON), `block_xmlrpc_file` (toggle, server-level .htaccess block),
+  `disable_app_passwords` (toggle), `generic_login_errors` (toggle),
+  `protect_sensitive_files` (toggle, root .htaccess), `csp_collect_sample`
+  (select: 1/5/10/25/50/100%, conditional on CSP enabled). `csp_collect_until`
+  is a server-managed timestamp and intentionally not in the schema.
+- **`class-mwpspfw-connector.php` — `MIN_SPFW_VERSION`:** bumped from `1.8.0`
+  to `2.1.0`. The new settings require schema additions that shipped across
+  child versions 1.13.0–2.1.0; sites running older SPFW would accept but ignore
+  unknown keys, so the version gate ensures the child actually processes every
+  field this extension sends.
+- Version bumped to 1.4.0 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog + upgrade notice).
+- **No connector changes:** the existing `get_settings`/`update_settings`
+  actions are schema-agnostic — they serialize/deserialize whatever the schema
+declares, so new fields are handled automatically.
+- **No JS/CSS changes:** the existing `data-requires-field`/`data-requires-value`
+  conditional logic in `mwpspfw-admin.js` handles all new conditional fields
+  (google_maps_exceptions, remove_comment_urls, block_css_smart_mode,
+  csp_collect_sample) without modification.
+
+### Key field changes summary
+
+| Change | Old key | New key | Reason |
+|---|---|---|---|
+| Renamed | `core.heartbeat_mode` | `core.heartbeat_control` | Child renamed in Step 10 |
+| Renamed | `core.heartbeat_interval` | `core.heartbeat_frequency` | Child renamed + type changed to select |
+| Moved | `core.disable_xmlrpc` | `hardening.disable_xmlrpc` | Child moved in v2.0.2 |
+
+### Schema field count
+
+| Tab | Before (v1.3.0) | After (v1.4.0) |
+|---|---|---|
+| Core | 28 | 29 |
+| REST API | 3 | 3 |
+| Hardening | 14 | 20 |
+| Fonts | 3 | 3 |
+| WooCommerce | 6 | 6 |
+| **Total** | **54** | **61** |
+
+## Historical Phase: Phase 6 (Native secure downloads, v1.3.0)
 
 Replaced the publicly-accessible uploaded-file storage with MainWP's native
 signed download URL mechanism. Uploaded ZIPs are now stored in MainWP's
