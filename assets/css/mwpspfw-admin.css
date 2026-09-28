@@ -57,27 +57,79 @@
 	resize: vertical;
 }
 
-/* ─── Read-only CSP display ─────────────────────────────────────────────── */
+/* ─── multi_check groups ────────────────────────────────────────────────── */
 
-.mwpspfw-readonly-csp {
-	margin-top: 8px;
+.mwpspfw-multi-check {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
 }
 
-.mwpspfw-csp-preview {
-	padding: 12px;
-	border-radius: 4px;
-	font-size: 12px;
-	overflow-x: auto;
-	white-space: pre-wrap;
-	word-break: break-all;
+.mwpspfw-multi-check-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
-.mwpspfw-csp-table {
-	font-size: 12px;
+/* ─── Raw textarea (custom CSP policy) ──────────────────────────────────── */
+
+.mwpspfw-textarea {
+	font-family: monospace;
+	font-size: 13px;
 }
 
-.mwpspfw-csp-table code {
-	font-size: 11px;
+/* ─── Permissions-Policy composite ──────────────────────────────────────── */
+
+.mwpspfw-permissions-policy {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.mwpspfw-permissions-policy-feature {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.mwpspfw-pp-origins {
+	flex: 1;
+	min-width: 260px;
+	font-family: monospace;
+	font-size: 13px;
+}
+
+/* ─── CSP directive builder grid ────────────────────────────────────────── */
+
+.mwpspfw-csp-directives {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 8px 12px;
+	align-items: center;
+}
+
+.mwpspfw-csp-directive label {
+	font-weight: 600;
+}
+
+.mwpspfw-csp-directive-input {
+	width: 100%;
+	font-family: monospace;
+	font-size: 13px;
+}
+
+/* ─── Hardening status badges ───────────────────────────────────────────── */
+
+/* Making the Fomantic toggle container inline-block keeps the badge on the
+   same row as its .htaccess toggle. */
+.mwpspfw-field-toggle .ui.toggle.checkbox {
+	display: inline-block;
+}
+
+.mwpspfw-status-badge {
+	margin-left: 12px;
+	vertical-align: middle;
 }
 
 /* ─── Bulk install bar ─────────────────────────────────────────────────── */

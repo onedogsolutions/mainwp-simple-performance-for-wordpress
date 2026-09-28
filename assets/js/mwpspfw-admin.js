@@ -5,6 +5,8 @@
  * - Tab switching on the per-site configuration screen
  * - Conditional field visibility (data-requires-field / data-requires-value)
  * - Form serialization → AJAX POST → re-hydrate
+ * - Post-save re-hydration of scalar, multi_check, composite (Permissions-
+ *   Policy, CSP directives) and hardening-status-badge state
  * - Dirty-form tracking (beforeunload warning)
  * - Overview: per-row Check / Install buttons, bulk select + install
  */
@@ -109,9 +111,13 @@
 
 				// Convert dot-notation to bracket notation for form lookup.
 				var parts = reqName.split( '.' );
-				var inputName = 'fields[' + parts[0] + '][' + parts[1] + ']';
+				var inputName = 'fields[' + parts[ 0 ] + '][' + parts[ 1 ] + ']';
 
-				var input = form.querySelector( '[name="' + inputName + '"]' );
+				// Toggles render a hidden '0' twin before their checkbox, and
+				// querySelector returns the first match — prefer the checkbox so
+				// the condition tracks its checked state, not the twin's '0'.
+				var input = form.querySelector( '[name="' + inputName + '"][type="checkbox"]' )
+					|| form.querySelector( '[name="' + inputName + '"]' );
 				var visible = false;
 
 				if ( input ) {
@@ -224,6 +230,12 @@
 				var value = settings[ group ][ key ];
 
 				inputs.forEach( function ( input ) {
+					if ( 'hidden' === input.type ) {
+						// The hidden '0' twin of a toggle checkbox must stay '0';
+						// writing the stored boolean here would post the string
+						// 'false' for every unchecked toggle on the next save.
+						return;
+					}
 					if ( 'checkbox' === input.type ) {
 						input.checked = ( true === value || '1' === value || 1 === value );
 					} else if ( 'textarea' === input.tagName.toLowerCase() ) {
@@ -236,12 +248,101 @@
 						input.value = value;
 					}
 				} );
+
+				// multi_check groups post as fields[group][key][]; check the boxes
+				// whose value is in the stored array and clear the rest.
+				if ( Array.isArray( value ) ) {
+					var vals = value.map( function ( v ) { return String( v ); } );
+					$$( '[name="' + inputName + '[]"]', form ).forEach( function ( box ) {
+						box.checked = vals.indexOf( box.value ) !== -1;
+					} );
+				}
+
+				// Composites post one level deeper than the plain field name.
+				if ( 'hardening' === group && 'permissions_policy' === key ) {
+					rehydratePermissionsPolicy( form, value );
+				}
+				if ( 'hardening' === group && 'csp_directives' === key ) {
+					rehydrateCspDirectives( form, value );
+				}
 			} );
 		} );
+
+		rehydrateStatusBadges( form, settings );
 
 		// Re-evaluate conditional visibility after rehydration.
 		var event = new Event( 'change', { bubbles: true } );
 		form.dispatchEvent( event );
+	}
+
+	/**
+	 * Permissions-Policy composite: feature => tokens[] (blocked) | false.
+	 * Blocked features check their box and fill the origins input with the
+	 * space-separated allowlist; unblocked features clear both. Features the
+	 * child dropped (unblocked) keep their rendered unchecked state.
+	 */
+	function rehydratePermissionsPolicy( form, policy ) {
+		if ( 'object' !== typeof policy || null === policy ) {
+			return;
+		}
+		Object.keys( policy ).forEach( function ( feature ) {
+			var tokens = policy[ feature ];
+			var blocked = Array.isArray( tokens );
+			var base = 'fields[hardening][permissions_policy][' + feature + ']';
+			var blockBox = form.querySelector( 'input[type="checkbox"][name="' + base + '[block]"]' );
+			var origins = form.querySelector( '[name="' + base + '[origins]"]' );
+			if ( blockBox ) {
+				blockBox.checked = blocked;
+			}
+			if ( origins ) {
+				origins.value = blocked ? tokens.join( ' ' ) : '';
+			}
+		} );
+	}
+
+	/**
+	 * CSP-directives composite: directive => tokens[]. The child preserves
+	 * empty token lists, so every posted directive comes back and the input
+	 * is set to the space-joined list (empty clears the field).
+	 */
+	function rehydrateCspDirectives( form, directives ) {
+		if ( 'object' !== typeof directives || null === directives ) {
+			return;
+		}
+		Object.keys( directives ).forEach( function ( directive ) {
+			var tokens = directives[ directive ];
+			if ( ! Array.isArray( tokens ) ) {
+				return;
+			}
+			var input = form.querySelector( '[name="fields[hardening][csp_directives][' + directive + '"]' );
+			if ( input ) {
+				input.value = tokens.join( ' ' );
+			}
+		} );
+	}
+
+	/**
+	 * Hardening status badges: 'hardening_status' / 'uploads_hardening_status'
+	 * are top-level strings in the settings payload, not a field group. Tone
+	 * map mirrors render_status_badge() in class-mwpspfw-individual.php.
+	 */
+	function rehydrateStatusBadges( form, settings ) {
+		var tone = {
+			ok: 'positive',
+			missing: 'negative',
+			altered: 'warning',
+			unsupported: 'basic',
+			advisory: 'basic'
+		};
+		$$( '.mwpspfw-status-badge', form ).forEach( function ( badge ) {
+			var key = badge.getAttribute( 'data-status-key' );
+			var status = key ? settings[ key ] : null;
+			if ( 'string' !== typeof status || ! tone[ status ] ) {
+				return;
+			}
+			badge.className = 'ui ' + tone[ status ] + ' label mwpspfw-status-badge';
+			badge.textContent = ( admin.statusLabels && admin.statusLabels[ status ] ) ? admin.statusLabels[ status ] : status;
+		} );
 	}
 
 	/* ─── Overview: Check button ──────────────────────────────────────────── */

@@ -100,7 +100,7 @@ class MWPSPFW_Individual {
 	}
 
 	/**
-	 * Render the five-tab settings form.
+	 * Render the six-tab settings form.
 	 *
 	 * @param int   $site_id MainWP internal website ID.
 	 * @param array $data    The connector's successful 'get_settings' payload:
@@ -191,7 +191,7 @@ class MWPSPFW_Individual {
 	 * @param string $dot_key  Dot-notation settings key (e.g. 'core.disable_emojis').
 	 * @param array  $field    Field definition from the schema.
 	 * @param mixed  $value    Current value.
-	 * @param array  $settings Full nested settings (for readonly display).
+	 * @param array  $settings Full nested settings (for the hardening status badges).
 	 */
 	private function render_field( $dot_key, array $field, $value, array $settings ) {
 		$requires_attr = '';
@@ -209,7 +209,7 @@ class MWPSPFW_Individual {
 		$id    = 'mwpspfw-' . str_replace( '.', '-', $dot_key );
 		?>
 		<div class="field mwpspfw-field mwpspfw-field-<?php echo esc_attr( $field['type'] ); ?>"<?php echo $requires_attr; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from esc_attr() above. ?>>
-			<?php if ( 'toggle' !== $field['type'] && 'readonly' !== $field['type'] ) : ?>
+			<?php if ( 'toggle' !== $field['type'] ) : ?>
 				<label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
 			<?php endif; ?>
 			<?php
@@ -228,6 +228,7 @@ class MWPSPFW_Individual {
 						<label for="<?php echo esc_attr( $id ); ?>"><?php echo esc_html( $field['label'] ); ?></label>
 					</div>
 					<?php
+					$this->render_status_badge( $dot_key, $settings );
 					break;
 
 				case 'select':
@@ -269,12 +270,114 @@ class MWPSPFW_Individual {
 					<?php
 					break;
 
-				case 'readonly':
-					$this->render_readonly_csp( $settings );
+				case 'text':
+					?>
+					<div class="ui input">
+						<input
+							type="<?php echo esc_attr( isset( $field['input_type'] ) ? $field['input_type'] : 'text' ); ?>"
+							id="<?php echo esc_attr( $id ); ?>"
+							name="<?php echo esc_attr( $name ); ?>"
+							value="<?php echo esc_attr( is_string( $value ) ? $value : '' ); ?>"
+						/>
+					</div>
+					<?php
+					break;
+
+				case 'textarea':
+					?>
+					<textarea
+						class="mwpspfw-textarea"
+						id="<?php echo esc_attr( $id ); ?>"
+						name="<?php echo esc_attr( $name ); ?>"
+						rows="3"
+					><?php echo esc_textarea( is_string( $value ) ? $value : '' ); ?></textarea>
+					<?php
+					break;
+
+				case 'multi_check':
+					$checked_values = is_array( $value ) ? array_map( 'strval', $value ) : array();
+					?>
+					<div class="mwpspfw-multi-check">
+						<?php foreach ( $field['options'] as $option_value => $option_label ) : ?>
+							<label class="mwpspfw-multi-check-item" for="<?php echo esc_attr( $id . '-' . $option_value ); ?>">
+								<input
+									type="checkbox"
+									id="<?php echo esc_attr( $id . '-' . $option_value ); ?>"
+									name="<?php echo esc_attr( $name ); ?>[]"
+									value="<?php echo esc_attr( $option_value ); ?>"
+									<?php checked( in_array( (string) $option_value, $checked_values, true ) ); ?>
+								/>
+								<?php echo esc_html( $option_label ); ?>
+							</label>
+						<?php endforeach; ?>
+					</div>
+					<?php
+					break;
+
+				case 'permissions_policy':
+					$features = isset( $field['features'] ) && is_array( $field['features'] ) ? $field['features'] : array();
+					$policy   = is_array( $value ) ? $value : array();
+					?>
+					<div class="mwpspfw-permissions-policy">
+						<?php foreach ( $features as $feature ) : ?>
+							<?php
+							$feature_value = isset( $policy[ $feature ] ) ? $policy[ $feature ] : null;
+							$blocked       = is_array( $feature_value );
+							$origins       = $blocked ? implode( ' ', $feature_value ) : '';
+							$block_id      = $id . '-' . $feature . '-block';
+							$origins_id    = $id . '-' . $feature . '-origins';
+							?>
+							<div class="mwpspfw-permissions-policy-feature">
+								<div class="ui toggle checkbox">
+									<input type="hidden" name="<?php echo esc_attr( $name ); ?>[<?php echo esc_attr( $feature ); ?>][block]" value="0" />
+									<input
+										type="checkbox"
+										id="<?php echo esc_attr( $block_id ); ?>"
+										name="<?php echo esc_attr( $name ); ?>[<?php echo esc_attr( $feature ); ?>][block]"
+										value="1"
+										<?php checked( $blocked ); ?>
+									/>
+									<label for="<?php echo esc_attr( $block_id ); ?>"><?php echo esc_html( $feature ); ?></label>
+								</div>
+								<input
+									type="text"
+									class="mwpspfw-pp-origins"
+									id="<?php echo esc_attr( $origins_id ); ?>"
+									name="<?php echo esc_attr( $name ); ?>[<?php echo esc_attr( $feature ); ?>][origins]"
+									value="<?php echo esc_attr( $origins ); ?>"
+									placeholder="<?php echo esc_attr( "'self' https://example.com" ); ?>"
+								/>
+							</div>
+						<?php endforeach; ?>
+					</div>
+					<?php
+					break;
+
+				case 'csp_directives':
+					$directives = isset( $field['directives'] ) && is_array( $field['directives'] ) ? $field['directives'] : array();
+					$stored     = is_array( $value ) ? $value : array();
+					?>
+					<div class="mwpspfw-csp-directives">
+						<?php foreach ( $directives as $directive ) : ?>
+							<?php $tokens = isset( $stored[ $directive ] ) && is_array( $stored[ $directive ] ) ? $stored[ $directive ] : array(); ?>
+							<div class="mwpspfw-csp-directive">
+								<label for="<?php echo esc_attr( $id . '-' . $directive ); ?>"><code><?php echo esc_html( $directive ); ?></code></label>
+								<input
+									type="text"
+									class="mwpspfw-csp-directive-input"
+									id="<?php echo esc_attr( $id . '-' . $directive ); ?>"
+									name="<?php echo esc_attr( $name ); ?>[<?php echo esc_attr( $directive ); ?>]"
+									value="<?php echo esc_attr( implode( ' ', $tokens ) ); ?>"
+									placeholder="<?php echo esc_attr( "'self' data: https:" ); ?>"
+								/>
+							</div>
+						<?php endforeach; ?>
+					</div>
+					<?php
 					break;
 			endswitch;
 			?>
-			<?php if ( ! empty( $field['description'] ) && 'readonly' !== $field['type'] ) : ?>
+			<?php if ( ! empty( $field['description'] ) ) : ?>
 				<p class="mwpspfw-field-description"><?php echo esc_html( $field['description'] ); ?></p>
 			<?php endif; ?>
 		</div>
@@ -282,47 +385,57 @@ class MWPSPFW_Individual {
 	}
 
 	/**
-	 * Render the read-only CSP directives summary.
+	 * Render the .htaccess hardening status badge beside its toggle row.
 	 *
-	 * @param array $settings Full nested settings from the child.
+	 * The child bridge injects 'hardening_status' / 'uploads_hardening_status'
+	 * at the top level of the settings payload (get_settings only); values and
+	 * labels mirror the status chips the child's own admin shows. Kept in sync
+	 * with the tone map in rehydrateStatusBadges() in mwpspfw-admin.js.
+	 *
+	 * @param string $dot_key  Dot-notation settings key being rendered.
+	 * @param array  $settings Full nested settings from the child.
 	 */
-	private function render_readonly_csp( array $settings ) {
-		$hardening    = isset( $settings['hardening'] ) && is_array( $settings['hardening'] ) ? $settings['hardening'] : array();
-		$csp_mode     = isset( $hardening['csp_mode'] ) ? $hardening['csp_mode'] : 'builder';
-		$csp_policy   = isset( $hardening['csp_policy'] ) ? $hardening['csp_policy'] : '';
-		$csp_directives = isset( $hardening['csp_directives'] ) && is_array( $hardening['csp_directives'] ) ? $hardening['csp_directives'] : array();
-		?>
-		<div class="mwpspfw-readonly-csp">
-			<p class="mwpspfw-field-description">
-				<?php esc_html_e( 'The CSP directive builder is only available in the child site\'s own admin panel. Below is a read-only summary of the current policy.', 'mainwp-simple-performance-for-wordpress' ); ?>
-			</p>
-			<?php if ( 'custom' === $csp_mode && ! empty( $csp_policy ) ) : ?>
-				<pre class="mwpspfw-csp-preview"><?php echo esc_html( $csp_policy ); ?></pre>
-			<?php elseif ( ! empty( $csp_directives ) ) : ?>
-				<table class="ui very compact small table mwpspfw-csp-table">
-					<tbody>
-						<?php foreach ( $csp_directives as $directive => $sources ) : ?>
-							<?php if ( ! is_array( $sources ) || empty( $sources ) ) : ?>
-								<?php continue; ?>
-							<?php endif; ?>
-							<tr>
-								<td class="collapsing"><code><?php echo esc_html( $directive ); ?></code></td>
-								<td><code><?php echo esc_html( implode( ' ', $sources ) ); ?></code></td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-			<?php else : ?>
-				<p class="mwpspfw-field-description"><?php esc_html_e( 'No CSP directives configured.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
-			<?php endif; ?>
-		</div>
-		<?php
+	private function render_status_badge( $dot_key, array $settings ) {
+		$badge_keys = array(
+			'hardening.plugins_htaccess' => 'hardening_status',
+			'hardening.uploads_htaccess' => 'uploads_hardening_status',
+		);
+
+		if ( ! isset( $badge_keys[ $dot_key ] ) ) {
+			return;
+		}
+
+		$status_key = $badge_keys[ $dot_key ];
+		$status     = isset( $settings[ $status_key ] ) && is_string( $settings[ $status_key ] ) ? $settings[ $status_key ] : '';
+
+		$statuses = array(
+			'ok'          => array( 'positive', __( 'Active', 'mainwp-simple-performance-for-wordpress' ) ),
+			'missing'     => array( 'negative', __( 'File missing', 'mainwp-simple-performance-for-wordpress' ) ),
+			'altered'     => array( 'warning', __( 'File modified', 'mainwp-simple-performance-for-wordpress' ) ),
+			'unsupported' => array( 'basic', __( 'Not available on this server', 'mainwp-simple-performance-for-wordpress' ) ),
+			'advisory'    => array( 'basic', __( 'Needs server config', 'mainwp-simple-performance-for-wordpress' ) ),
+		);
+
+		if ( '' === $status || ! isset( $statuses[ $status ] ) ) {
+			return;
+		}
+
+		printf(
+			'<span class="ui %1$s label mwpspfw-status-badge" data-status-key="%2$s">%3$s</span>',
+			esc_attr( $statuses[ $status ][0] ),
+			esc_attr( $status_key ),
+			esc_html( $statuses[ $status ][1] )
+		);
 	}
 
 	/**
 	 * AJAX handler: build a settings payload from the posted form and push it
 	 * to the child through the connector, then return what the child actually
 	 * persisted so the form can re-hydrate with the post-save truth.
+	 *
+	 * After a successful update the settings are re-read once: the update
+	 * envelope carries the persisted values but not the hardening status
+	 * keys, which the bridge injects on get_settings only.
 	 */
 	public function ajax_save() {
 		check_ajax_referer( 'mwpspfw_save_settings', 'nonce' );
@@ -342,10 +455,6 @@ class MWPSPFW_Individual {
 		// Build flat dot-notation values from the posted nested structure.
 		$flat = array();
 		foreach ( MWPSPFW_Settings_Schema::get_fields() as $dot_key => $field ) {
-			if ( 'readonly' === $field['type'] ) {
-				continue;
-			}
-
 			$group = $field['group'];
 			$key   = substr( $dot_key, strlen( $group ) + 1 );
 
@@ -366,6 +475,14 @@ class MWPSPFW_Individual {
 			}
 		}
 
+		// Mirror the child UI: turning "Disable XML-RPC" off also unchecks the
+		// server-level block. The block row is hidden client-side at that point,
+		// but hidden conditional inputs still post their values, so the coercion
+		// has to happen here.
+		if ( empty( $flat['hardening.disable_xmlrpc'] ) || '1' !== (string) $flat['hardening.disable_xmlrpc'] ) {
+			$flat['hardening.block_xmlrpc_file'] = '0';
+		}
+
 		// Convert flat values to the nested structure SPFW expects.
 		$settings = MWPSPFW_Settings_Schema::nest( $flat );
 
@@ -380,6 +497,12 @@ class MWPSPFW_Individual {
 			);
 		}
 
-		wp_send_json_success( $result['data'] );
+		// Re-read the settings so the response carries the fresh hardening
+		// status keys alongside the persisted values. If the re-read itself
+		// fails, fall back to the update envelope rather than failing an
+		// already-successful save.
+		$refresh = MWPSPFW_Connector::get_settings( $site_id );
+
+		wp_send_json_success( $refresh['ok'] ? $refresh['data'] : $result['data'] );
 	}
 }

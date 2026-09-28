@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -14,18 +14,19 @@ Configure the Simple Performance for WordPress plugin on each connected child si
 
 A MainWP Dashboard extension for configuring the [Simple Performance for WordPress](https://wordpress.org/plugins/simple-performance-for-wordpress/) plugin on each connected child site, without logging in to that site individually.
 
-Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each individual child site's own screen (Sites → site name → Performance), covering the same five tabs as SPFW's own settings screen:
+Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each individual child site's own screen (Sites → site name → Performance), covering the same six tabs as SPFW's own settings screen:
 
-* **Core Optimizations** — Disable emojis, embeds, dashicons, XML-RPC, Google Maps, comments, block editor CSS, dashboard widgets, and more. Control heartbeat, post revisions, autosave intervals.
+* **Core Optimizations** — Disable emojis, embeds, dashicons, XML-RPC, Google Maps, comments, block editor CSS, dashboard widgets, WP-Cron, site search, scaled images, intermediate image sizes, and more. Control heartbeat, post revisions, autosave intervals, speculation rules.
 * **REST API** — Require authentication, disable namespaces, whitelist routes.
-* **Hardening** — Directory hardening (plugins + uploads), XML-RPC (PHP + server-level), file editing, author enumeration, application passwords, login errors, sensitive file protection, security headers, CSP (with violation sampling), HSTS.
+* **Hardening** — Directory hardening (plugins + uploads, with live .htaccess status badges), XML-RPC (PHP + server-level), file editing, author enumeration, application passwords, login errors, sensitive file protection, PHP execution whitelist, file integrity monitoring, security headers, Permissions-Policy, CSP (fully editable directives, custom policy mode, violation sampling and collection controls), HSTS.
 * **Fonts** — Localize Google Fonts for GDPR compliance and faster loading.
 * **WooCommerce** — Disable cart fragments, scripts/styles on non-shop pages, widgets, and more.
+* **Database** — Choose cleanup targets (revisions, auto drafts, trashed posts, spam/trashed comments, transients, table optimization) and an automatic optimization schedule.
 
 = Requirements =
 
 * MainWP Dashboard plugin (latest version)
-* Simple Performance for WordPress 2.1.0 or later on child sites (carries the bridge this extension talks to)
+* Simple Performance for WordPress 2.17.0 or later on child sites (carries the bridge this extension talks to)
 
 = Features =
 
@@ -54,17 +55,28 @@ No. This is a MainWP Dashboard extension and requires the MainWP Dashboard plugi
 
 = What version of Simple Performance for WordPress is required on child sites? =
 
-Version 2.1.0 or later, which includes the MainWP child bridge and all settings this extension can manage. If a child site runs an older version, you'll see a notice with an option to install/upgrade.
+Version 2.17.0 or later, which includes the MainWP child bridge and all settings this extension can manage. If a child site runs an older version, you'll see a notice with an option to install/upgrade.
 
 = Can I manage CSP directives from MainWP? =
 
-The CSP directive builder is complex and site-specific, so it remains read-only from the MainWP Dashboard. You can enable/disable CSP and set the mode, but fine-tuning directives should be done in the child site's own admin panel.
+Yes. The CSP builder's 13 whitelisted directives can each be edited directly from the MainWP Dashboard as space-separated source lists, and a custom raw policy can be entered when CSP Mode is set to Custom. The child's own admin additionally offers a visual builder with preset chips and the violation log.
 
-= Can I trigger a font scan from MainWP? =
+= Can I trigger a database cleanup or font scan from MainWP? =
 
-No. Font scanning touches the child site's filesystem and should be triggered from the child's own admin panel. You can, however, manage the localize toggle and manual font families from MainWP.
+No. One-shot operations (database scan/cleanup, font scan, htaccess verification) touch the child site's filesystem and remain in the child's own admin. From MainWP you manage the cleanup targets, the automatic optimization schedule, and the font settings.
 
 == Changelog ==
+
+= 1.5.0 =
+* Full settings parity with SPFW child v2.17.0: 27 new field definitions across Core, Hardening, and a new Database tab (88 total, up from 61).
+* New Core fields: disable WP-Cron (+ cron lock timeout), speculation rules, disable site search (+ redirect to homepage), disable scaled images, disable intermediate image sizes.
+* CSP is now fully editable: all 13 builder directives as space-separated source lists, custom raw policy mode, tighten script-src, 'strict-dynamic', violation rate limit, and collection controls (admin inclusion, cache bypass).
+* New Hardening fields: Permissions-Policy feature controls (block or allowlist per feature), PHP execution whitelist, auto-allow known plugin endpoints, file integrity monitoring (+ alert email).
+* New Database tab: eight cleanup targets plus an automatic table-optimization schedule.
+* Hardening status badges (Active / File missing / File modified / …) beside the plugins and uploads .htaccess rows, refreshed after every save.
+* Fixed: six duplicate Core field definitions removed; post-revision options now cover the full 1–30 range; autosave interval matches the child's 0–5 minute options; block CSS smart mode default corrected to on.
+* Fixed: conditional rows depending on a toggle now evaluate the checkbox state (previously the hidden '0' twin could keep dependent rows hidden), and post-save re-hydration no longer writes the string 'false' into unchecked toggles.
+* Minimum SPFW child version bumped from 2.1.0 to 2.17.0.
 
 = 1.4.0 =
 * Schema aligned with SPFW v2.1.0: 17 new field definitions added across Core and Hardening tabs.
@@ -109,6 +121,9 @@ No. Font scanning touches the child site's filesystem and should be triggered fr
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.5.0 =
+Full settings parity with SPFW v2.17.0: editable CSP directives and Permissions-Policy, new Database tab, file monitoring, and hardening status badges. Requires SPFW 2.17.0+ on child sites.
 
 = 1.4.0 =
 Schema alignment: adds 17 new field definitions matching SPFW v2.1.0. Requires SPFW 2.1.0+ on child sites.

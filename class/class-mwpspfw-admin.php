@@ -115,6 +115,13 @@ class MWPSPFW_Admin {
 				'bulkDone'       => __( 'Bulk install complete: %1$d succeeded, %2$d failed.', 'mainwp-simple-performance-for-wordpress' ),
 				'bulkNone'       => __( 'No sites selected.', 'mainwp-simple-performance-for-wordpress' ),
 				'bulkSelected'   => __( '%d selected', 'mainwp-simple-performance-for-wordpress' ),
+				'statusLabels'   => array(
+					'ok'          => __( 'Active', 'mainwp-simple-performance-for-wordpress' ),
+					'missing'     => __( 'File missing', 'mainwp-simple-performance-for-wordpress' ),
+					'altered'     => __( 'File modified', 'mainwp-simple-performance-for-wordpress' ),
+					'unsupported' => __( 'Not available on this server', 'mainwp-simple-performance-for-wordpress' ),
+					'advisory'    => __( 'Needs server config', 'mainwp-simple-performance-for-wordpress' ),
+				),
 			)
 		);
 	}

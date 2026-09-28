@@ -27,9 +27,14 @@ class MWPSPFW_Connector {
 	/**
 	 * Minimum SPFW plugin version known to carry the MainWP bridge.
 	 *
+	 * 2.17.0 is the release this extension's schema is verified against. The
+	 * newest fields (strict-dynamic, CSP collection toggles) need the child
+	 * >= 2.13.0; older children silently drop unknown settings keys, so a
+	 * higher floor keeps silent partial saves from looking successful.
+	 *
 	 * @var string
 	 */
-	const MIN_SPFW_VERSION = '2.1.0';
+	const MIN_SPFW_VERSION = '2.17.0';
 
 	/**
 	 * Fetch the current SPFW settings from a child site.

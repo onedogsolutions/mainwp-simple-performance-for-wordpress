@@ -5,7 +5,118 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-# Current Phase: Phase 7 (Schema alignment with SPFW v2.1.0, v1.4.0)
+# Current Phase: Phase 8 (Full settings parity with SPFW v2.17.0, v1.5.0)
+
+Aligned the extension's schema with child plugin v2.17.0. The child had shipped
+new settings across v1.15.0–v2.13.0 (cron/speculation/search/image sizes/
+permissions-policy, CSP tightening + strict-dynamic + collection controls, PHP
+whitelist + file monitor, database cleanup) that the dashboard could not
+configure, and the v1.4.0 schema carried six duplicate Core field definitions
+plus two child-mismatching field definitions. Field count: 61 → 88.
+
+### Phase 8 Modifications (v1.5.0)
+
+- **`class-mwpspfw-settings-schema.php` — bug fixes:** removed the six duplicate
+  Core definitions (`disable_google_maps`, `google_maps_exceptions`,
+  `disable_password_meter`, `disable_comments`, `remove_comment_urls`,
+  `blank_favicon` — each was defined twice; PHP keeps the last value at the
+  first position, and the two `remove_comment_urls` definitions carried
+  contradictory `requires`); dropped `remove_comment_urls`'s `requires`
+  entirely (the child shows it unconditionally); `block_css_smart_mode` default
+  '0' → '1' (child defaults true); `block_xmlrpc_file` gained
+  `requires hardening.disable_xmlrpc = 1`; `post_revisions` expanded from a
+  subset to the full default/disable/1–30 range; `autosave_interval` changed
+  from int 0–10 to a select of the child's 0–5 minute options (the child clamps
+  to 0–5).
+- **Schema — new Core fields (7):** `disable_wp_cron` (warns: only with a real
+  system cron) + `cron_lock_timeout` (select 0/60/120/300, conditional),
+  `speculation_rules` (select default/conservative/disable), `disable_search` +
+  `search_redirect_home` (conditional), `disable_scaled_images`, and
+  `disabled_image_sizes` — first use of the new `multi_check` type
+  (1536x1536 / 2048x2048 / medium_large, stored as an array).
+- **Schema — new Hardening fields (11 + CSP editability):** `permissions_policy`
+  (new composite: 6 features, stored as feature => tokens[] when blocked or
+  false when unblocked), `csp_policy` (new `textarea` type: custom-mode raw
+  policy string), `csp_directives` changed from `readonly` to an editable
+  composite (the child's 13 whitelisted directives, each posted as a
+  space-separated token string; defaults copied 1:1 from the child's own
+  default map), `csp_tighten_script_src`, `csp_strict_dynamic`, `csp_rate_limit`
+  (int 5–60), `csp_collect_admin`, `csp_collect_nocache`, `php_whitelist`
+  (route_list: wp-content-relative PHP paths), `auto_allow_known_php`,
+  `file_monitor_enabled`, and `file_monitor_email` (new `text` type, input
+  type email, conditional on the monitor being on).
+- **Schema — new `database` tab (9 fields, no WooCommerce gating):** eight
+  cleanup-target toggles (Clean Post Revisions / Auto Drafts / Trashed Posts /
+  Spam Comments / Trashed Comments / Expired Transients / All Transients /
+  Optimize Tables) + `optimize_schedule` (select off/daily/weekly/monthly).
+  `database.post_revisions` deletes revisions during a cleanup run and is
+  distinct from `core.post_revisions`, which caps future revisions. One-shot
+  scan/cleanup actions stay in the child admin (operations, not settings).
+- **Schema — `flatten()`/`nest()` for the new types:** text/textarea are trim-
+  only passthrough (the child's `sanitize()` is the authority); multi_check is
+  whitelisted to declared options; the composites go through new private
+  helpers `nest_permissions_policy()` (posted block+origins → tokens[]|false,
+  empty allowlist = `[]`) and `nest_csp_directives()` (string → tokens[], empty
+  string = `[]`, which the child preserves so clearing a directive sticks).
+  Toggle coercion now uses `filter_var( FILTER_VALIDATE_BOOLEAN )` so a stale
+  client posting the string 'false' cannot flip a toggle on.
+- **`class-mwpspfw-individual.php`:** `render_field()` gained cases for text,
+  textarea, multi_check (checkboxes named `fields[group][key][]`), and the two
+  composites — permissions-policy renders per-feature a hidden-0+checkbox-1
+  block toggle plus an origins text input
+  (`fields[hardening][permissions_policy][feature][block|origins]`), and CSP
+  renders 13 labeled token inputs
+  (`fields[hardening][csp_directives][directive]`), replacing
+  `render_readonly_csp()` (removed). Hardening status badges render beside the
+  plugins/uploads .htaccess rows from the bridge's top-level
+  `hardening_status` / `uploads_hardening_status` (get_settings only), mapping
+  ok/missing/altered/unsupported/advisory → Active / File missing / File
+  modified / Not available on this server / Needs server config. `ajax_save()`
+  coerces `block_xmlrpc_file = 0` when `disable_xmlrpc` is off (mirrors the
+  child UI's auto-uncheck; hidden conditional inputs still post values), and
+  after a successful update re-reads settings once so the response carries the
+  fresh status keys — the update envelope does not include them. A failed
+  re-read falls back to the update envelope rather than failing the save.
+- **`assets/js/mwpspfw-admin.js`:** `rehydrateForm()` extended to refresh
+  multi_check boxes (name ends `[]`), both composites (permissions-policy from
+  the tokens[]|false map; CSP directives as space-joined lists), and the status
+  badges (tone map mirrors the server renderer, labels from the new localized
+  `statusLabels`). Also fixed two latent round-trip bugs: conditional rows now
+  resolve the toggle's checkbox instead of its hidden '0' twin (previously
+  every toggle-dependent row stayed hidden), and rehydration skips hidden
+  inputs (previously stored booleans overwrote the twins, so unchecked toggles
+  posted the string 'false' on the next save).
+- **`assets/css/mwpspfw-admin.css`:** layout-only additions — multi_check
+  groups, permissions-policy feature rows, the CSP directive grid, and status
+  badge placement (the Fomantic label classes carry the tones). The read-only
+  CSP rules were removed. Still no color values.
+- **`class-mwpspfw-connector.php`:** `MIN_SPFW_VERSION` 2.1.0 → 2.17.0. The
+  newest fields need the child ≥ 2.13.0, and older children silently drop
+  unknown keys — the higher floor keeps silent partial saves from looking
+  successful. No transport changes.
+- **`class-mwpspfw-admin.php`:** added `statusLabels` to the `mwpspfwAdmin`
+  localized data (used by the badge refresh after save).
+- Version bumped to 1.5.0 (plugin header, `MWPSPFW_VERSION`, `readme.txt`
+  stable tag + changelog + upgrade notice; the plugin/readme descriptions now
+  cover six tabs including Database).
+
+### Schema field count
+
+| Tab | Before (v1.4.0) | After (v1.5.0) |
+|---|---|---|
+| Core | 29 | 36 |
+| REST API | 3 | 3 |
+| Hardening | 20 | 31 |
+| Fonts | 3 | 3 |
+| WooCommerce | 6 | 6 |
+| Database | — | 9 |
+| **Total** | **61** | **88** |
+
+(The v1.4.0 "before" column counts effective fields; its six duplicate Core
+definitions produced no extra settings. `csp_directives` existed before as a
+readonly display and was re-typed, not added.)
+
+## Historical Phase: Phase 7 (Schema alignment with SPFW v2.1.0, v1.4.0)
 
 Aligned the MainWP extension's settings schema with the child plugin (SPFW
 v2.1.0). The child plugin had accumulated 17 new field definitions and
@@ -388,36 +499,69 @@ Fomantic UI chrome and the settings form is plain inputs). Namespace
 - **CSP builder read-only.** The structured CSP directive builder is too
   complex for remote editing. Only the enable/disable/mode toggles are managed
   from the dashboard; the directives themselves display as a read-only summary.
+  *(Superseded in Phase 8: all 13 builder directives and the custom raw policy
+  are now fully editable from the dashboard.)*
 - **Field naming convention.** Form fields use bracket notation
   (`fields[core][disable_emojis]`) to preserve the grouped structure through
   the save cycle.
 
 ## Child-Side Bridge (separate repository)
 
-The child-side bridge (`includes/class-spfw-mainwp-child.php`) must be added to
-the `onedogsolutions/simple-performance-for-wordpress` repository. It hooks
+The child-side bridge (`includes/class-spfw-mainwp-child.php`) ships inside the
+`onedogsolutions/simple-performance-for-wordpress` plugin. It hooks
 `mainwp_child_extra_execution` to handle `get_settings` and `update_settings`
-actions from the dashboard, routing writes through the existing `SPFW_Rest_Settings`
-callbacks so all validation stays single-source.
+actions from the dashboard, routing both through `SPFW_Settings::get()/update()`
+so all validation stays single-source. It is a schema-agnostic passthrough —
+this extension's schema is the sole authority on which fields exist, and no
+child-side changes were needed for Phase 8 (verified against child v2.17.0
+source).
 
-**Wire contract (frozen):**
+**Wire contract:**
 - Request field: `spfw_action` (`get_settings` | `update_settings`)
 - For updates: JSON-encoded `settings` field (`wp_unslash()` required child-side
   since `$_POST` arrives slashed)
 - Response envelope key: `spfw` with `success`, `version`, `woocommerce_active`,
   `settings` fields
+- `get_settings` additionally injects top-level `hardening_status` and
+  `uploads_hardening_status` strings (ok/missing/altered/unsupported/advisory)
+  beside the settings array — `update_settings` does not, which is why
+  `ajax_save()` re-reads settings after a successful save (Phase 8).
 
 ## Next Steps
 
-- **End-to-end testing** on a live MainWP Dashboard with connected child sites
-  running SPFW ≥ 1.8.0 (with the child bridge installed).
-- **Child bridge implementation** in the SPFW repository (code provided, needs
-  to be added and released in SPFW v1.9.0+).
-- Verify: extension appears under Extensions, the per-site "Performance" tab
-  renders inside MainWP chrome, settings save round-trips correctly, bulk
-  install works on sites without SPFW.
+- **Manual QA against a child site running SPFW 2.17.0** (the extension floor
+  is now 2.17.0, so older children show the bridge-missing notice):
+  - All six tabs render; Database tab appears after the WooCommerce gating
+    logic.
+  - Conditional show/hide works for: cron lock timeout, search redirect, all
+    CSP sub-fields, file monitor email, Permissions-Policy under security
+    headers, Block xmlrpc.php under Disable XML-RPC, custom policy under
+    custom mode.
+  - Save round-trip per new field; post-save rehydration updates multi_check
+    and both composites correctly.
+  - Permissions-Policy: unchecking a feature sends `false`; an empty allowlist
+    sends `[]`.
+  - CSP builder directives: clearing a directive's tokens clears it on the
+    child.
+  - Hardening status badges render on load and refresh after save.
+  - Regression: the original 61 fields still save and round-trip.
+- Rebuild the distribution ZIP after any further change (build command in the
+  project's build-configuration notes; excludes `.git`, `.DS_Store`, existing
+  ZIPs, and STATE.md).
 
 ## Historical Phases
+
+### Phase 7 (Schema alignment with SPFW v2.1.0, v1.4.0)
+
+Aligned the settings schema with child v2.1.0: heartbeat key renames,
+disable_xmlrpc moved to Hardening, 17 new field definitions. See the Phase 7
+Modifications section above for full details.
+
+### Phase 6 (Native secure downloads, v1.3.0)
+
+Replaced publicly-accessible uploaded-file storage with MainWP's native signed
+download URL mechanism. See the Phase 6 Modifications section above for full
+details.
 
 ### Phase 5 (JSON-encode url parameter, v1.2.3)
 
