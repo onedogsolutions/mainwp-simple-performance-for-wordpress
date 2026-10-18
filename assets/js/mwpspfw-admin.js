@@ -8,7 +8,10 @@
  * - Post-save re-hydration of scalar, multi_check, composite (Permissions-
  *   Policy, CSP directives) and hardening-status-badge state
  * - Dirty-form tracking (beforeunload warning)
+ * - File integrity review (per-site Hardening tab): pending changes, Scan
+ *   now, Mark as verified per scope
  * - Overview: per-row Check / Install buttons, bulk select + install
+ * - Overview: fleet file integrity comparison, differences, consensus verify
  */
 
 ( function () {
@@ -61,6 +64,40 @@
 			pairs.push( encodeURIComponent( el.name ) + '=' + encodeURIComponent( el.value ) );
 		} );
 		return pairs.join( '&' );
+	}
+
+	/**
+	 * Build an element with an optional class and text. Child-supplied
+	 * strings (paths, slugs, versions) only ever go through textContent.
+	 */
+	function el( tag, className, text ) {
+		var node = document.createElement( tag );
+		if ( className ) {
+			node.className = className;
+		}
+		if ( 'undefined' !== typeof text && null !== text ) {
+			node.textContent = String( text );
+		}
+		return node;
+	}
+
+	function fmt( template ) {
+		var args = Array.prototype.slice.call( arguments, 1 );
+		var i = 0;
+		return String( template || '' ).replace( /%(\d+\$)?[sd]/g, function ( match, pos ) {
+			var idx = pos ? parseInt( pos, 10 ) - 1 : i++;
+			return 'undefined' !== typeof args[ idx ] ? String( args[ idx ] ) : match;
+		} );
+	}
+
+	function formatTime( seconds ) {
+		return seconds ? new Date( seconds * 1000 ).toLocaleString() : ( admin.fileReview ? admin.fileReview.never : '' );
+	}
+
+	function ajaxQuery( params ) {
+		return Object.keys( params ).map( function ( k ) {
+			return encodeURIComponent( k ) + '=' + encodeURIComponent( params[ k ] );
+		} ).join( '&' );
 	}
 
 	/* ─── Tab switching ───────────────────────────────────────────────────── */
@@ -203,6 +240,7 @@
 					// Re-hydrate form with the child's post-save state.
 					if ( response.data && response.data.settings ) {
 						rehydrateForm( form, response.data.settings );
+						form.dispatchEvent( new CustomEvent( 'mwpspfw:settings', { detail: response.data.settings } ) );
 					}
 				} else {
 					var msg = ( response.data && response.data.message ) ? response.data.message : admin.saveError;
@@ -345,6 +383,228 @@
 		} );
 	}
 
+	/* ─── Per-site: File integrity review ─────────────────────────────────── */
+
+	/**
+	 * Group the child's pending set by verification scope: 'uploads', or a
+	 * plugin slug. Each group lists its unexplained paths and, for a plugin,
+	 * the unverified version change if there is one.
+	 */
+	function reviewGroups( pending ) {
+		var groups = {};
+		var order = [];
+		var unexplained = ( pending && pending.unexplained ) || {};
+		var updates = ( pending && pending.updates ) || {};
+
+		function group( scope ) {
+			if ( ! groups[ scope ] ) {
+				groups[ scope ] = { scope: scope, update: null, paths: [] };
+				order.push( scope );
+			}
+			return groups[ scope ];
+		}
+
+		function scopeOf( path ) {
+			if ( 0 === path.indexOf( 'uploads/' ) ) {
+				return 'uploads';
+			}
+			var parts = path.split( '/' );
+			return parts.length > 1 ? parts[ 1 ] : path;
+		}
+
+		[ 'added', 'modified', 'removed' ].forEach( function ( type ) {
+			( unexplained[ type ] || [] ).forEach( function ( path ) {
+				group( scopeOf( path ) ).paths.push( { type: type, path: path } );
+			} );
+		} );
+
+		Object.keys( updates ).forEach( function ( slug ) {
+			var u = updates[ slug ] || {};
+			var g = group( slug );
+			g.update = { from: u.from || '', to: u.to || '' };
+			[ 'added', 'modified', 'removed' ].forEach( function ( type ) {
+				( ( u.paths && u.paths[ type ] ) || [] ).forEach( function ( path ) {
+					g.paths.push( { type: type, path: path } );
+				} );
+			} );
+		} );
+
+		return order.map( function ( scope ) {
+			return groups[ scope ];
+		} );
+	}
+
+	function scopeSignature( signatures, scope ) {
+		if ( ! signatures ) {
+			return '';
+		}
+		if ( 'all' === scope || 'uploads' === scope ) {
+			return signatures[ scope ] || '';
+		}
+		return ( signatures.plugins && signatures.plugins[ scope ] ) || '';
+	}
+
+	function renderFileReview( container, state ) {
+		var t = admin.fileReview || {};
+		var body = $( '.mwpspfw-file-review-body', container );
+		if ( ! body || ! state ) {
+			return;
+		}
+
+		body.textContent = '';
+
+		var verified = state.verified || {};
+		var meta = el( 'p', 'mwpspfw-file-review-meta' );
+		meta.appendChild( el( 'span', '', fmt( t.lastScan, formatTime( state.last_scan ), state.snapshot_count || 0 ) ) );
+		if ( verified.time ) {
+			var source = ( t.sources && t.sources[ verified.source ] ) || verified.source || '';
+			var who = verified.user ? fmt( t.byUser, verified.user ) : '';
+			meta.appendChild( el( 'br' ) );
+			meta.appendChild( el( 'span', '', fmt( t.lastVerified, formatTime( verified.time ), source ) + who ) );
+		}
+		body.appendChild( meta );
+
+		var pending = state.pending || {};
+		var groups = reviewGroups( pending );
+
+		if ( ! groups.length ) {
+			body.appendChild( el( 'div', 'ui positive message', t.nothingPending ) );
+			return;
+		}
+
+		groups.forEach( function ( g ) {
+			var box = el( 'div', 'mwpspfw-file-review-group' );
+			var head = el( 'div', 'mwpspfw-file-review-group-head' );
+			var title = el( 'strong', '', 'uploads' === g.scope ? t.uploadsScope : g.scope );
+			head.appendChild( title );
+
+			if ( g.update ) {
+				head.appendChild( el( 'span', 'ui basic label', fmt( t.unverifiedUpdate, g.update.from || '?', g.update.to || '?' ) ) );
+			}
+
+			var sig = scopeSignature( pending.signatures, g.scope );
+			if ( sig ) {
+				var btn = el( 'button', 'ui mini button mwpspfw-verify-files-btn', t.markVerified );
+				btn.type = 'button';
+				btn.setAttribute( 'data-scope', g.scope );
+				btn.setAttribute( 'data-signature', sig );
+				head.appendChild( btn );
+			}
+			box.appendChild( head );
+
+			if ( g.paths.length ) {
+				var list = el( 'ul', 'mwpspfw-file-list' );
+				g.paths.forEach( function ( item ) {
+					var li = el( 'li' );
+					li.appendChild( el( 'span', 'mwpspfw-file-change mwpspfw-file-change-' + item.type, ( t.types && t.types[ item.type ] ) || item.type ) );
+					li.appendChild( el( 'code', '', item.path ) );
+					list.appendChild( li );
+				} );
+				box.appendChild( list );
+			}
+
+			body.appendChild( box );
+		} );
+
+		var allSig = scopeSignature( pending.signatures, 'all' );
+		if ( groups.length > 1 && allSig ) {
+			var all = el( 'button', 'ui button mwpspfw-verify-files-btn', t.markAllVerified );
+			all.type = 'button';
+			all.setAttribute( 'data-scope', 'all' );
+			all.setAttribute( 'data-signature', allSig );
+			body.appendChild( el( 'p' ) ).appendChild( all );
+		}
+	}
+
+	function initFileReview() {
+		var container = $( '#mwpspfw-file-review' );
+		var form = $( '#mwpspfw-settings-form' );
+		if ( ! container || '1' !== container.getAttribute( 'data-supported' ) || ! form ) {
+			return;
+		}
+
+		var t = admin.fileReview || {};
+		var siteId = form.getAttribute( 'data-site-id' );
+		var status = $( '.mwpspfw-file-review-status', container );
+		var busy = false;
+		var state;
+
+		try {
+			state = JSON.parse( container.getAttribute( 'data-state' ) || '{}' );
+		} catch ( e ) {
+			state = {};
+		}
+		renderFileReview( container, state );
+
+		function run( params, workingText ) {
+			if ( busy ) {
+				return;
+			}
+			busy = true;
+			if ( status ) {
+				status.textContent = workingText;
+			}
+			$$( 'button', container ).forEach( function ( b ) {
+				b.disabled = true;
+			} );
+
+			params.nonce = admin.fileReviewNonce;
+			params.site_id = siteId;
+
+			ajaxPost( ajaxQuery( params ), function ( response ) {
+				busy = false;
+				$$( 'button', container ).forEach( function ( b ) {
+					b.disabled = false;
+				} );
+
+				if ( response.success && response.data && response.data.file_monitor ) {
+					renderFileReview( container, response.data.file_monitor );
+					if ( status ) {
+						status.textContent = t.done;
+					}
+					return;
+				}
+
+				var d = response.data || {};
+				if ( status ) {
+					status.textContent = '✗ ' + ( 'spfw_files_changed' === d.code ? t.changedSinceReview : ( d.message || admin.saveError ) );
+				}
+			} );
+		}
+
+		container.addEventListener( 'click', function ( e ) {
+			var target = e.target;
+			if ( ! target || 'BUTTON' !== target.tagName ) {
+				return;
+			}
+
+			if ( target.classList.contains( 'mwpspfw-scan-files-btn' ) ) {
+				run( { action: 'mwpspfw_scan_files' }, t.scanning );
+				return;
+			}
+
+			if ( target.classList.contains( 'mwpspfw-verify-files-btn' ) ) {
+				var scope = target.getAttribute( 'data-scope' );
+				var label = 'all' === scope ? t.allScope : ( 'uploads' === scope ? t.uploadsScope : scope );
+				if ( ! window.confirm( fmt( t.confirmVerify, label ) ) ) {
+					return;
+				}
+				run( {
+					action: 'mwpspfw_verify_files',
+					scope: scope,
+					signature: target.getAttribute( 'data-signature' )
+				}, t.verifying );
+			}
+		} );
+
+		// A settings save re-reads the child, so the review refreshes too.
+		form.addEventListener( 'mwpspfw:settings', function ( e ) {
+			if ( e.detail && e.detail.file_monitor ) {
+				renderFileReview( container, e.detail.file_monitor );
+			}
+		} );
+	}
+
 	/* ─── Overview: Check button ──────────────────────────────────────────── */
 
 	function initCheckButtons() {
@@ -378,6 +638,9 @@
 						}
 						if ( d.fonts_localized ) {
 							parts.push( 'Fonts localized' );
+						}
+						if ( d.integrity_pending ) {
+							parts.push( fmt( admin.fileReview && admin.fileReview.pendingCount, d.integrity_pending ) );
 						}
 						statusCell.textContent = parts.length ? parts.join( ' · ' ) : '✓';
 					} else if ( statusCell ) {
@@ -552,6 +815,339 @@
 		}
 
 		updateBulkUI();
+	}
+
+	/* ─── Overview: Fleet file integrity ──────────────────────────────────── */
+
+	function initFleetIntegrity() {
+		var root = $( '#mwpspfw-fleet' );
+		if ( ! root ) {
+			return;
+		}
+
+		var t = admin.fleet || {};
+		var runBtn = $( '#mwpspfw-fleet-run-btn' );
+		var status = $( '#mwpspfw-fleet-status' );
+		var out = $( '#mwpspfw-fleet-report' );
+		var canVerify = '1' === root.getAttribute( 'data-can-verify' );
+		var sites;
+		var report;
+
+		try {
+			sites = JSON.parse( root.getAttribute( 'data-sites' ) || '{}' ) || {};
+			report = JSON.parse( root.getAttribute( 'data-report' ) || 'null' );
+		} catch ( e ) {
+			sites = {};
+			report = null;
+		}
+
+		function siteName( id ) {
+			var s = sites[ id ];
+			return s ? ( s.name || s.url || ( '#' + id ) ) : ( '#' + id );
+		}
+
+		function siteLink( id ) {
+			var s = sites[ id ];
+			var a = el( 'a', '', siteName( id ) );
+			if ( s && s.link ) {
+				a.href = s.link;
+			}
+			return a;
+		}
+
+		function post( params, cb ) {
+			params.nonce = admin.integrityNonce;
+			ajaxPost( ajaxQuery( params ), cb );
+		}
+
+		function renderDiff( holder, data ) {
+			holder.textContent = '';
+			holder.appendChild( el( 'p', '', fmt( t.diffAgainst, siteName( data.reference ) ) ) );
+			var diff = data.diff || {};
+			var any = false;
+			var list = el( 'ul', 'mwpspfw-file-list' );
+			[ 'added', 'modified', 'removed' ].forEach( function ( type ) {
+				( diff[ type ] || [] ).forEach( function ( path ) {
+					any = true;
+					var li = el( 'li' );
+					var types = ( admin.fileReview && admin.fileReview.types ) || {};
+					li.appendChild( el( 'span', 'mwpspfw-file-change mwpspfw-file-change-' + type, types[ type ] || type ) );
+					li.appendChild( el( 'code', '', path ) );
+					list.appendChild( li );
+				} );
+			} );
+			holder.appendChild( any ? list : el( 'p', '', t.diffNone ) );
+		}
+
+		function outlierItem( group, siteId ) {
+			var li = el( 'li', 'mwpspfw-fleet-outlier' );
+			li.appendChild( siteLink( siteId ) );
+			var btn = el( 'button', 'ui mini button', t.showDiff );
+			btn.type = 'button';
+			var holder = el( 'div', 'mwpspfw-fleet-diff' );
+			btn.addEventListener( 'click', function () {
+				btn.disabled = true;
+				holder.textContent = t.loadingDiff;
+				post( { action: 'mwpspfw_integrity_diff', slug: group.slug, version: group.version, site_id: siteId }, function ( response ) {
+					btn.disabled = false;
+					if ( response.success ) {
+						renderDiff( holder, response.data );
+					} else {
+						holder.textContent = '✗ ' + ( ( response.data && response.data.message ) || admin.saveError );
+					}
+				} );
+			} );
+			li.appendChild( document.createTextNode( ' ' ) );
+			li.appendChild( btn );
+			li.appendChild( holder );
+			return li;
+		}
+
+		function consensusControl( group ) {
+			var wrap = el( 'div', 'mwpspfw-fleet-consensus' );
+			var btn = el( 'button', 'ui mini green button', fmt( t.verifyButton, group.verifiable.length ) );
+			btn.type = 'button';
+			var results = el( 'ul', 'mwpspfw-fleet-consensus-results' );
+
+			btn.addEventListener( 'click', function () {
+				var excluded = group.outliers.length ? group.outliers.map( siteName ).join( ', ' ) : t.none;
+				if ( ! window.confirm( fmt( t.confirmConsensus, group.slug, group.version, group.majority_sites.length, group.verifiable.length, excluded ) ) ) {
+					return;
+				}
+
+				var queue = group.verifiable.slice();
+				btn.disabled = true;
+				results.textContent = '';
+
+				function next() {
+					if ( ! queue.length ) {
+						btn.disabled = ! group.verifiable.length;
+						btn.textContent = fmt( t.verifyButton, group.verifiable.length );
+						btn.hidden = ! group.verifiable.length;
+						return;
+					}
+					var siteId = queue.shift();
+					var li = el( 'li' );
+					li.appendChild( siteLink( siteId ) );
+					var state = el( 'span', '', ' — ' + t.verifyingSite );
+					li.appendChild( state );
+					results.appendChild( li );
+
+					post( { action: 'mwpspfw_integrity_consensus', slug: group.slug, version: group.version, site_id: siteId }, function ( response ) {
+						if ( response.success ) {
+							state.textContent = ' — ' + t.verifiedSite;
+							group.verifiable = group.verifiable.filter( function ( id ) {
+								return id !== siteId;
+							} );
+							group.pending = group.pending.filter( function ( id ) {
+								return id !== siteId;
+							} );
+						} else {
+							var d = response.data || {};
+							state.textContent = ' — ✗ ' + ( 'spfw_files_changed' === d.code ? t.changedSince : ( d.message || admin.saveError ) );
+						}
+						next();
+					} );
+				}
+
+				next();
+			} );
+
+			wrap.appendChild( btn );
+			wrap.appendChild( results );
+			return wrap;
+		}
+
+		function groupRow( group ) {
+			var tr = el( 'tr', 'mwpspfw-fleet-row mwpspfw-fleet-' + group.verdict );
+			var name = el( 'td' );
+			name.appendChild( el( 'strong', '', group.slug ) );
+			name.appendChild( el( 'span', 'mwpspfw-fleet-version', ' ' + group.version ) );
+			tr.appendChild( name );
+			tr.appendChild( el( 'td', '', group.sites ) );
+
+			var tone = { outlier: 'red', no_majority: 'orange', consistent: 'green', single: 'basic' }[ group.verdict ] || 'basic';
+			var verdict = el( 'td' );
+			verdict.appendChild( el( 'span', 'ui ' + tone + ' label', ( t.verdicts && t.verdicts[ group.verdict ] ) || group.verdict ) );
+			tr.appendChild( verdict );
+
+			var detail = el( 'td' );
+			if ( group.outliers.length ) {
+				detail.appendChild( el( 'div', '', t.outlierLabel ) );
+				var list = el( 'ul', 'mwpspfw-fleet-outliers' );
+				group.outliers.forEach( function ( id ) {
+					list.appendChild( outlierItem( group, id ) );
+				} );
+				detail.appendChild( list );
+			}
+			if ( 'no_majority' === group.verdict ) {
+				detail.appendChild( el( 'p', '', t.noMajorityHelp ) );
+				var variants = el( 'ul', 'mwpspfw-fleet-variants' );
+				Object.keys( group.variants || {} ).forEach( function ( fp ) {
+					var li = el( 'li' );
+					li.appendChild( el( 'code', '', fp.substring( 0, 12 ) ) );
+					li.appendChild( document.createTextNode( ': ' ) );
+					group.variants[ fp ].forEach( function ( id, i ) {
+						if ( i ) {
+							li.appendChild( document.createTextNode( ', ' ) );
+						}
+						li.appendChild( siteLink( id ) );
+					} );
+					variants.appendChild( li );
+				} );
+				detail.appendChild( variants );
+			}
+			if ( group.pending.length ) {
+				detail.appendChild( el( 'div', 'mwpspfw-fleet-pending', fmt( t.pendingLabel, group.pending.length ) ) );
+			}
+			if ( canVerify && group.verifiable.length ) {
+				detail.appendChild( consensusControl( group ) );
+			}
+			tr.appendChild( detail );
+			return tr;
+		}
+
+		function renderReport() {
+			out.textContent = '';
+
+			if ( ! report || ! report.groups ) {
+				out.appendChild( el( 'p', '', t.noReport ) );
+				return;
+			}
+
+			out.appendChild( el( 'p', 'mwpspfw-fleet-meta', fmt( t.reportMeta, formatTime( report.time ), report.user || '', report.sites_compared || 0 ) ) );
+
+			// Only rows that need a look; identical and single-site versions
+			// are summarized.
+			var shown = report.groups.filter( function ( g ) {
+				return 'outlier' === g.verdict || 'no_majority' === g.verdict || g.pending.length;
+			} );
+			var counts = { consistent: 0, single: 0 };
+			report.groups.forEach( function ( g ) {
+				if ( shown.indexOf( g ) === -1 && 'undefined' !== typeof counts[ g.verdict ] ) {
+					counts[ g.verdict ]++;
+				}
+			} );
+
+			if ( shown.length ) {
+				var table = el( 'table', 'ui unstackable table mwpspfw-fleet-table' );
+				var head = el( 'tr' );
+				[ t.colPlugin, t.colSites, t.colVerdict, t.colDetail ].forEach( function ( h ) {
+					head.appendChild( el( 'th', '', h ) );
+				} );
+				table.appendChild( el( 'thead' ) ).appendChild( head );
+				var tbody = el( 'tbody' );
+				shown.forEach( function ( g ) {
+					tbody.appendChild( groupRow( g ) );
+				} );
+				table.appendChild( tbody );
+				out.appendChild( table );
+			} else {
+				out.appendChild( el( 'div', 'ui positive message', t.allConsistent ) );
+			}
+
+			var summary = [];
+			if ( counts.consistent ) {
+				summary.push( counts.consistent + ' ' + ( t.verdicts.consistent || '' ).toLowerCase() );
+			}
+			if ( counts.single ) {
+				summary.push( counts.single + ' ' + ( t.verdicts.single || '' ).toLowerCase() );
+			}
+			if ( summary.length ) {
+				out.appendChild( el( 'p', 'mwpspfw-field-description', summary.join( ' · ' ) ) );
+			}
+
+			var uploads = report.uploads_pending || {};
+			if ( Object.keys( uploads ).length ) {
+				out.appendChild( el( 'h4', 'ui header', t.uploadsHeading ) );
+				var ul = el( 'ul', 'mwpspfw-fleet-uploads' );
+				Object.keys( uploads ).forEach( function ( id ) {
+					var li = el( 'li' );
+					li.appendChild( siteLink( id ) );
+					li.appendChild( document.createTextNode( ': ' + fmt( t.uploadsPending, uploads[ id ] ) ) );
+					ul.appendChild( li );
+				} );
+				out.appendChild( ul );
+			}
+
+			var skipped = report.skipped || {};
+			var skippedIds = Object.keys( skipped );
+			if ( skippedIds.length ) {
+				out.appendChild( el( 'p', 'mwpspfw-fleet-skipped-head', fmt( t.skippedLabel, skippedIds.length ) ) );
+				var sl = el( 'ul', 'mwpspfw-fleet-skipped' );
+				skippedIds.forEach( function ( id ) {
+					var li = el( 'li' );
+					li.appendChild( siteLink( id ) );
+					li.appendChild( document.createTextNode( ': ' + skipped[ id ] ) );
+					sl.appendChild( li );
+				} );
+				out.appendChild( sl );
+			}
+		}
+
+		function randomId() {
+			var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+			var id = '';
+			for ( var i = 0; i < 16; i++ ) {
+				id += chars.charAt( Math.floor( Math.random() * chars.length ) );
+			}
+			return id;
+		}
+
+		if ( runBtn ) {
+			runBtn.addEventListener( 'click', function () {
+				var boxes = $$( '.mwpspfw-site-checkbox' );
+				var chosen = boxes.filter( function ( cb ) {
+					return cb.checked;
+				} );
+				var ids = ( chosen.length ? chosen : boxes ).map( function ( cb ) {
+					return cb.value;
+				} );
+
+				if ( ! ids.length ) {
+					status.textContent = t.noSites;
+					return;
+				}
+
+				var runId = randomId();
+				var i = 0;
+				runBtn.disabled = true;
+
+				function collectNext() {
+					if ( i >= ids.length ) {
+						status.textContent = t.analyzing;
+						post( { action: 'mwpspfw_integrity_analyze', run_id: runId }, function ( response ) {
+							runBtn.disabled = false;
+							if ( response.success && response.data && response.data.report ) {
+								report = response.data.report;
+								status.textContent = '';
+								renderReport();
+							} else {
+								status.textContent = '✗ ' + ( ( response.data && response.data.message ) || admin.saveError );
+							}
+						} );
+						return;
+					}
+
+					status.textContent = fmt( t.collecting, i + 1, ids.length );
+					post( { action: 'mwpspfw_integrity_collect', run_id: runId, site_id: ids[ i ] }, function ( response ) {
+						if ( ! response.success ) {
+							// A gate or nonce failure stops the run; a site that
+							// could not be read is recorded as skipped server-side.
+							runBtn.disabled = false;
+							status.textContent = '✗ ' + ( ( response.data && response.data.message ) || admin.saveError );
+							return;
+						}
+						i++;
+						collectNext();
+					} );
+				}
+
+				collectNext();
+			} );
+		}
+
+		renderReport();
 	}
 
 	/* ─── Overview: Package form with drag-and-drop upload ────────────────── */
@@ -846,9 +1442,11 @@
 		initConditionalFields();
 		initDirtyTracking();
 		initSaveForm();
+		initFileReview();
 		initCheckButtons();
 		initInstallButtons();
 		initBulkActions();
+		initFleetIntegrity();
 		initPackageForm();
 		initDebugLog();
 	}

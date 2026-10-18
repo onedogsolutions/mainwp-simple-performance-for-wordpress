@@ -147,6 +147,8 @@ class MWPSPFW_Overview {
 			<?php if ( empty( $sites ) ) : ?>
 				<div class="ui message"><?php esc_html_e( 'No connected child sites were found.', 'mainwp-simple-performance-for-wordpress' ); ?></div>
 			<?php else : ?>
+				<?php MWPSPFW_Integrity::get_instance()->render_segment( $sites ); ?>
+
 				<div class="mwpspfw-bulk-bar" id="mwpspfw-bulk-bar">
 					<span id="mwpspfw-bulk-count"></span>
 					<button type="button" class="ui green button" id="mwpspfw-bulk-install-btn" disabled>
@@ -374,12 +376,29 @@ class MWPSPFW_Overview {
 			}
 		}
 
+		// File changes waiting for review (SPFW >= 2.21.0 reports them).
+		$version             = isset( $result['data']['version'] ) ? (string) $result['data']['version'] : '';
+		$integrity_supported = MWPSPFW_Connector::supports_integrity( $version ) && isset( $settings['file_monitor']['pending'] );
+		$integrity_pending   = 0;
+
+		if ( $integrity_supported ) {
+			$pending = $settings['file_monitor']['pending'];
+
+			foreach ( array( 'added', 'modified', 'removed' ) as $type ) {
+				$integrity_pending += isset( $pending['unexplained'][ $type ] ) && is_array( $pending['unexplained'][ $type ] ) ? count( $pending['unexplained'][ $type ] ) : 0;
+			}
+
+			$integrity_pending += isset( $pending['updates'] ) && is_array( $pending['updates'] ) ? count( $pending['updates'] ) : 0;
+		}
+
 		wp_send_json_success(
 			array(
-				'version'         => isset( $result['data']['version'] ) ? $result['data']['version'] : '',
-				'active_toggles'  => $active_core,
-				'csp_enabled'     => ! empty( $hardening['csp_enabled'] ),
-				'fonts_localized' => ! empty( $settings['fonts']['localize_google'] ),
+				'version'             => $version,
+				'active_toggles'      => $active_core,
+				'csp_enabled'         => ! empty( $hardening['csp_enabled'] ),
+				'fonts_localized'     => ! empty( $settings['fonts']['localize_google'] ),
+				'integrity_supported' => $integrity_supported,
+				'integrity_pending'   => $integrity_pending,
 			)
 		);
 	}

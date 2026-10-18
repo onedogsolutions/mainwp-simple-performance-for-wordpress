@@ -37,6 +37,139 @@ class MWPSPFW_Connector {
 	const MIN_SPFW_VERSION = '2.17.0';
 
 	/**
+	 * Minimum SPFW version whose bridge carries the file-monitor actions
+	 * (scan, Mark as verified, plugin fingerprints, consensus verification).
+	 * Older children answer those actions with 'unknown action'.
+	 *
+	 * @var string
+	 */
+	const INTEGRITY_MIN_VERSION = '2.21.0';
+
+	/**
+	 * Whether a child's reported SPFW version carries the file-monitor actions.
+	 *
+	 * @param string $version Version from the bridge envelope.
+	 * @return bool
+	 */
+	public static function supports_integrity( $version ) {
+		return is_string( $version ) && '' !== $version && version_compare( $version, self::INTEGRITY_MIN_VERSION, '>=' );
+	}
+
+	/**
+	 * Run a file-integrity scan on the child.
+	 *
+	 * @param int $site_id MainWP internal website ID.
+	 * @return array{ok:bool,error_type:?string,message:string,data:?array} On
+	 *         success `data['data']` holds `scan_result` and `file_monitor`.
+	 */
+	public static function scan_files( $site_id ) {
+		return self::file_call( $site_id, 'scan_files' );
+	}
+
+	/**
+	 * Mark as verified on the child for one scope.
+	 *
+	 * @param int    $site_id   MainWP internal website ID.
+	 * @param string $signature The scope's signature from the reviewed state.
+	 * @param string $scope     'all', 'uploads', or a plugin slug.
+	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
+	 */
+	public static function verify_files( $site_id, $signature, $scope ) {
+		return self::file_call(
+			$site_id,
+			'verify_files',
+			array(
+				'signature' => (string) $signature,
+				'scope'     => (string) $scope,
+			)
+		);
+	}
+
+	/**
+	 * Fingerprint every plugin installed on the child.
+	 *
+	 * @param int $site_id MainWP internal website ID.
+	 * @return array{ok:bool,error_type:?string,message:string,data:?array} On
+	 *         success `data['data']['plugins']` is slug => {version,
+	 *         fingerprint, count, pending}.
+	 */
+	public static function plugin_fingerprints( $site_id ) {
+		return self::file_call( $site_id, 'plugin_fingerprints' );
+	}
+
+	/**
+	 * One plugin's file hashes on the child, relative to the plugin directory.
+	 *
+	 * @param int    $site_id MainWP internal website ID.
+	 * @param string $slug    Plugin slug.
+	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
+	 */
+	public static function plugin_files( $site_id, $slug ) {
+		return self::file_call( $site_id, 'plugin_files', array( 'slug' => (string) $slug ) );
+	}
+
+	/**
+	 * Ask the child to verify its copy of a plugin against the majority
+	 * fingerprint. The child recomputes its own fingerprint and refuses on
+	 * any mismatch.
+	 *
+	 * @param int    $site_id     MainWP internal website ID.
+	 * @param string $slug        Plugin slug.
+	 * @param string $version     Version the majority runs.
+	 * @param string $fingerprint Majority fingerprint.
+	 * @param int    $agreeing    Number of other sites with that fingerprint.
+	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
+	 */
+	public static function verify_consensus( $site_id, $slug, $version, $fingerprint, $agreeing ) {
+		return self::file_call(
+			$site_id,
+			'verify_consensus',
+			array(
+				'slug'        => (string) $slug,
+				'version'     => (string) $version,
+				'fingerprint' => (string) $fingerprint,
+				'agreeing'    => (int) $agreeing,
+			)
+		);
+	}
+
+	/**
+	 * A logged file-monitor call. An older child that does not know the
+	 * action is reported as 'unsupported' rather than a generic refusal.
+	 *
+	 * @param int                 $site_id MainWP internal website ID.
+	 * @param string              $action  Bridge action.
+	 * @param array<string,mixed> $extra   Extra POST fields.
+	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
+	 */
+	private static function file_call( $site_id, $action, array $extra = array() ) {
+		$result = self::call( $site_id, $action, $extra );
+
+		if ( ! $result['ok'] && 'bridge_error' === $result['error_type'] && 'unknown action' === $result['message'] ) {
+			$result['error_type'] = 'unsupported';
+			$result['message']    = sprintf(
+				/* translators: %s: minimum SPFW version for file integrity features. */
+				__( 'File integrity review needs Simple Performance for WordPress %s or later on this child site.', 'mainwp-simple-performance-for-wordpress' ),
+				self::INTEGRITY_MIN_VERSION
+			);
+		}
+
+		self::log(
+			'file_' . $action,
+			array(
+				'site_id'    => (int) $site_id,
+				'args'       => $extra,
+				'ok'         => $result['ok'],
+				'error_type' => $result['error_type'],
+				'code'       => isset( $result['code'] ) ? $result['code'] : '',
+				'message'    => $result['message'],
+			)
+		);
+
+		return $result;
+	}
+
+	/**
 	 * Fetch the current SPFW settings from a child site.
 	 *
 	 * @param int $site_id MainWP internal website ID.
@@ -197,7 +330,7 @@ class MWPSPFW_Connector {
 	 * bridge-reported error (e.g. an internal callback failure).
 	 *
 	 * @param int                  $site_id MainWP internal website ID.
-	 * @param string               $action  'get_settings' or 'update_settings'.
+	 * @param string               $action  Bridge action ('get_settings', 'update_settings', or a file-monitor action).
 	 * @param array<string,mixed>  $extra   Extra POST fields for the action.
 	 * @return array{ok:bool,error_type:?string,message:string,data:?array}
 	 */
@@ -251,6 +384,7 @@ class MWPSPFW_Connector {
 				'message'    => ! empty( $envelope['error'] )
 					? $envelope['error']
 					: __( 'Simple Performance for WordPress refused the request.', 'mainwp-simple-performance-for-wordpress' ),
+				'code'       => isset( $envelope['code'] ) && is_string( $envelope['code'] ) ? $envelope['code'] : '',
 				'data'       => null,
 			);
 		}

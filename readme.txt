@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,6 +27,7 @@ Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each
 
 * MainWP Dashboard plugin (latest version)
 * Simple Performance for WordPress 2.17.0 or later on child sites (carries the bridge this extension talks to)
+* Simple Performance for WordPress 2.21.0 or later for file integrity review and fleet comparison (older sites keep full settings support and are skipped by the comparison)
 
 = Features =
 
@@ -37,7 +38,9 @@ Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each
 * Upload a custom SPFW ZIP or link to a self-hosted build for installation
 * Uploaded files stored securely and served via time-limited signed URLs
 * Bulk install SPFW on multiple sites at once
-* Status check — quickly see which optimizations are active on each site
+* Status check — quickly see which optimizations are active on each site, and how many file changes wait for review
+* File integrity review — see each site's unverified file changes, scan, and Mark as verified from the dashboard
+* Fleet file integrity — compare each plugin version's files across all sites, see exactly which files differ on the odd site out, and verify matching copies in one confirmed step
 
 == Installation ==
 
@@ -66,6 +69,14 @@ Yes. The CSP builder's 13 whitelisted directives can each be edited directly fro
 No. One-shot operations (database scan/cleanup, font scan, htaccess verification) touch the child site's filesystem and remain in the child's own admin. From MainWP you manage the cleanup targets, the automatic optimization schedule, and the font settings.
 
 == Changelog ==
+
+= 1.6.0 =
+* New: Fleet File Integrity on the Extensions page. Compares each plugin version's files across your sites (one fingerprint per plugin per site) and flags the site whose copy differs from the majority, which is usually how an infected site is found. "Show differences" lists exactly which files were added, modified, or removed against a majority site.
+* New: consensus verification. Where at least three sites run identical copies of a plugin version and some of them still have that plugin waiting for review (for example a premium plugin copied in by SFTP), an administrator can verify those sites in one confirmed step. Each site rechecks its own files and refuses if they no longer match.
+* New: File integrity review on each site's Hardening tab: last scan, last verification and how it happened, unexplained changes and unverified updates grouped by plugin and uploads, Scan now, and Mark as verified per plugin, for uploads, or for everything.
+* New: the root .htaccess status badge beside "Protect sensitive files".
+* Improved: the overview Check button reports how many file changes are waiting for review.
+* File integrity features need SPFW 2.21.0 on the child; settings management still works from 2.17.0.
 
 = 1.5.0 =
 * Full settings parity with SPFW child v2.17.0: 27 new field definitions across Core, Hardening, and a new Database tab (88 total, up from 61).
@@ -121,6 +132,9 @@ No. One-shot operations (database scan/cleanup, font scan, htaccess verification
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.6.0 =
+Fleet file integrity comparison and per-site file review. These need SPFW 2.21.0+ on child sites; settings management still works from 2.17.0.
 
 = 1.5.0 =
 Full settings parity with SPFW v2.17.0: editable CSP directives and Permissions-Policy, new Database tab, file monitoring, and hardening status badges. Requires SPFW 2.17.0+ on child sites.

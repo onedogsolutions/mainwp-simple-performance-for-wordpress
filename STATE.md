@@ -5,7 +5,95 @@ A MainWP Dashboard extension for configuring the Simple Performance for WordPres
 site only. Companion plugin: `onedogsolutions/simple-performance-for-wordpress`
 (its own STATE.md tracks the child-side work).
 
-# Current Phase: Phase 8 (Full settings parity with SPFW v2.17.0, v1.5.0)
+# Current Phase: Phase 9 (File integrity parity + fleet comparison, v1.6.0)
+
+Brought the extension level with the child's file-monitor rework (SPFW
+2.18.0–2.20.1) and added the cross-site comparison the child's STATE.md
+listed as its next step (Open questions, "cross-site comparison through
+MainWP"). A plugin copied in by SFTP/git sits unverified on the child until
+someone marks it; comparing a plugin version's files across every managed site
+isolates the site whose copy differs, which is usually the infected one.
+
+**Settings parity needed no schema change.** Between child 2.17.0 and 2.20.1
+no settings keys were added (the file-monitor snapshot keys were removed from
+`spfw_settings` into their own option). The 88-field schema stands. The gap
+was the bridge: it carried settings only, so nothing 2.19/2.20 added (pending
+changes, verification, root status) reached the dashboard. That needed a
+child release, **SPFW 2.21.0**, made in the same change (see its STATE.md,
+decisions log 2026-10-18).
+
+### Phase 9 Modifications (v1.6.0)
+
+- **`class-mwpspfw-connector.php`:** `MIN_SPFW_VERSION` stays 2.17.0 for
+  settings; new `INTEGRITY_MIN_VERSION = '2.21.0'` +
+  `supports_integrity( $version )`. New wrappers `scan_files()`,
+  `verify_files()`, `plugin_fingerprints()`, `plugin_files()`,
+  `verify_consensus()` over `call()` via a logged `file_call()`, which maps
+  an older child's `unknown action` refusal to error_type `unsupported` with
+  a "needs 2.21.0" message. `bridge_error` results now carry the child's
+  `code` (e.g. `spfw_files_changed`) so the UI can tell a stale review from
+  a failure.
+- **`class-mwpspfw-individual.php`:** root `.htaccess` badge beside
+  `protect_sensitive_files` (`root_hardening_status`). New **File integrity
+  review** block at the end of the Hardening tab, rendered by JS from a
+  `data-state` JSON copy of the bridge's `settings.file_monitor` (one
+  renderer for first paint and refresh; no named inputs, so the form never
+  posts it). On a child below 2.21.0 it shows a notice instead. New AJAX
+  `mwpspfw_scan_files` / `mwpspfw_verify_files` (nonce
+  `mwpspfw_file_review`, `edit_sites` gate, same scope regex as the child).
+- **`class-mwpspfw-integrity.php` (new):** Fleet File Integrity.
+  - `analyze()` (pure) groups per-site fingerprints by `slug@version`, then
+    by fingerprint. Verdicts: `consistent`; `outlier` (a strict majority of
+    a group of >= 3; everyone else is an outlier); `no_majority`
+    (2 vs 2, 1 vs 1, ...); `single`. `verifiable` = majority sites that are
+    pending, only when the majority itself is >= 3 (the child needs >= 2
+    *other* agreeing sites). Outliers are never verifiable.
+  - `diff()` lists added/modified/removed relative paths of an outlier
+    against a majority site.
+  - AJAX `mwpspfw_integrity_collect` (one site per request, JS-driven like
+    bulk install; results kept in non-autoloaded `mwpspfw_integrity_run`
+    keyed by a browser-generated run id; unreachable/old sites recorded as
+    skipped with the reason), `_analyze` (stores
+    `mwpspfw_integrity_report`, non-autoloaded, with time/user), `_diff`,
+    `_consensus`.
+  - Consensus takes slug/version/site from the browser but the fingerprint
+    and quorum from the **stored report**, never the request, and needs
+    `manage_options` on the dashboard on top of `edit_sites`. The child
+    then recomputes its own fingerprint and refuses on any mismatch.
+- **`class-mwpspfw-overview.php`:** renders the Fleet segment above the site
+  table (it compares the checked sites, or all); `ajax_check()` adds
+  `integrity_supported` / `integrity_pending` (unexplained paths + update
+  slugs) and the status cell shows "N file changes to review".
+- **`class-mwpspfw-admin.php`:** six new AJAX routes, two nonces
+  (`fileReviewNonce`, `integrityNonce`), `fileReview` and `fleet` string
+  maps (including the six verification source labels).
+- **`assets/js/mwpspfw-admin.js`:** `el()`/`fmt()`/`formatTime()`/
+  `ajaxQuery()` helpers; `initFileReview()` (grouping by scope, per-scope and
+  all-scope Mark as verified with confirm, refresh after save through a
+  `mwpspfw:settings` event); `initFleetIntegrity()` (sequential collect,
+  analyze, report table showing only outlier / no-majority / pending rows
+  with the rest summarized, per-outlier Show differences, consensus button
+  with a confirm naming the excluded sites, sequential per-site results,
+  uploads pending and skipped lists). Every child-supplied string goes
+  through `textContent`.
+- **`assets/css/mwpspfw-admin.css`:** layout only (review groups, file
+  lists, fleet table cells). Still no color values.
+- Version 1.6.0 (header, `MWPSPFW_VERSION`, `readme.txt` stable tag,
+  requirements, features, changelog, upgrade notice).
+
+### Verified (static)
+
+- `php -l` clean on every PHP file; `node --check` clean on the JS.
+- Analyzer fixtures (scratch script, not committed): all agree; 4 vs 1;
+  2 vs 1 (outlier flagged, majority of 2 not verifiable); 2 vs 2; 1 vs 1;
+  single site; versions grouped separately; skipped sites with reasons;
+  uploads counts; outlier sorted first; `diff()`. 14/14 pass.
+- Child 2.21.0: 268 PHPUnit (10 new in `tests/MainWP_Bridge_Test.php`),
+  47 Jest, `npm run build`, `.pot` regenerated, ZIP built.
+- **Not verified:** nothing has run against a live MainWP Dashboard or child
+  site, and no screen has been seen in a browser. See Next Steps.
+
+## Historical Phase: Phase 8 (Full settings parity with SPFW v2.17.0, v1.5.0)
 
 Aligned the extension's schema with child plugin v2.17.0. The child had shipped
 new settings across v1.15.0–v2.13.0 (cron/speculation/search/image sizes/
@@ -526,8 +614,43 @@ source).
   `uploads_hardening_status` strings (ok/missing/altered/unsupported/advisory)
   beside the settings array — `update_settings` does not, which is why
   `ajax_save()` re-reads settings after a successful save (Phase 8).
+- From SPFW 2.21.0, `get_settings` also injects `root_hardening_status` and
+  `file_monitor` {last_scan, snapshot_count, pending {unexplained, updates,
+  signatures}, verified {time, source, user}} (Phase 9).
+- File-monitor actions (2.21.0, child requires `manage_options`; results
+  under `spfw.data`, refusals carry `spfw.code`):
+  `scan_files` → {scan_result, file_monitor};
+  `verify_files` {signature, scope} → same (source `mainwp`);
+  `plugin_fingerprints` → {plugins: slug => {version, fingerprint, count,
+  pending}, uploads_pending};
+  `plugin_files` {slug} → {slug, files: relpath => sha256};
+  `verify_consensus` {slug, version, fingerprint, agreeing} → {scan_result,
+  file_monitor} (source `consensus`; 409 `spfw_files_changed` on fingerprint
+  or version mismatch, 400 `spfw_consensus_too_small` when agreeing < 2).
+- Fingerprint = sha256 over sorted `relpath:sha256` lines of the plugin's
+  monitored PHP files, paths relative to the plugin directory.
 
 ## Next Steps
+
+- **Live QA for Phase 9** (dashboard 1.6.0 + at least three children on
+  SPFW 2.21.0, e.g. test.onedog.solutions plus two more):
+  - Per-site Hardening tab: root badge renders; review block lists pending
+    changes; Scan now refreshes it; Mark as verified clears a scope and the
+    child's own Review panel reads "marked as verified from the MainWP
+    dashboard"; a stale signature shows the "files changed" message.
+  - Fleet: plant a one-line comment edit in one site's copy of a plugin at
+    the same version; Compare flags that site and Show differences lists
+    exactly that file.
+  - SFTP-copy a premium plugin (same version) onto three sites: all three
+    pending; consensus verify clears them; the child records
+    `source: consensus`. Edit one copy between Compare and Verify: that site
+    refuses with "changed since the comparison".
+  - A child on 2.20.1: per-site tab shows the "needs 2.21.0" notice; Fleet
+    lists it as skipped, not failed; settings still save.
+  - Check bulk timing on the real fleet: `plugin_fingerprints` hashes every
+    plugin's PHP files on the child (the same work as a scan) per request.
+- **Commit both repos** (nothing is committed yet; child 2.21.0 must ship
+  before or with this release).
 
 - **Manual QA against a child site running SPFW 2.17.0** (the extension floor
   is now 2.17.0, so older children show the bridge-missing notice):

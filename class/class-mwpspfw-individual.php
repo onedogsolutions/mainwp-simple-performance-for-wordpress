@@ -167,6 +167,10 @@ class MWPSPFW_Individual {
 							$value   = isset( $flat[ $dot_key ] ) ? $flat[ $dot_key ] : $field['default'];
 							$this->render_field( $dot_key, $field, $value, $settings );
 						endforeach;
+
+						if ( 'hardening' === $tab['group'] ) {
+							$this->render_file_review( $data, $settings );
+						}
 						?>
 					</div>
 					<?php
@@ -388,7 +392,7 @@ class MWPSPFW_Individual {
 	 * Render the .htaccess hardening status badge beside its toggle row.
 	 *
 	 * The child bridge injects 'hardening_status' / 'uploads_hardening_status'
-	 * at the top level of the settings payload (get_settings only); values and
+	 * (and, from SPFW 2.21.0, 'root_hardening_status') at the top level of the settings payload (get_settings only); values and
 	 * labels mirror the status chips the child's own admin shows. Kept in sync
 	 * with the tone map in rehydrateStatusBadges() in mwpspfw-admin.js.
 	 *
@@ -397,8 +401,9 @@ class MWPSPFW_Individual {
 	 */
 	private function render_status_badge( $dot_key, array $settings ) {
 		$badge_keys = array(
-			'hardening.plugins_htaccess' => 'hardening_status',
-			'hardening.uploads_htaccess' => 'uploads_hardening_status',
+			'hardening.plugins_htaccess'        => 'hardening_status',
+			'hardening.uploads_htaccess'        => 'uploads_hardening_status',
+			'hardening.protect_sensitive_files' => 'root_hardening_status',
 		);
 
 		if ( ! isset( $badge_keys[ $dot_key ] ) ) {
@@ -426,6 +431,120 @@ class MWPSPFW_Individual {
 			esc_attr( $status_key ),
 			esc_html( $statuses[ $status ][1] )
 		);
+	}
+
+	/**
+	 * Render the File integrity review container at the end of the Hardening
+	 * tab. The list itself is drawn by initFileReview() in mwpspfw-admin.js
+	 * from the JSON state below, so the first render and every refresh after
+	 * Scan now / Mark as verified share one renderer. It holds no named
+	 * inputs, so the settings form never posts it.
+	 *
+	 * @param array $data     The connector's 'get_settings' payload.
+	 * @param array $settings Full nested settings from the child.
+	 */
+	private function render_file_review( array $data, array $settings ) {
+		$version   = isset( $data['version'] ) ? (string) $data['version'] : '';
+		$supported = MWPSPFW_Connector::supports_integrity( $version ) && isset( $settings['file_monitor'] ) && is_array( $settings['file_monitor'] );
+		?>
+		<div class="ui segment mwpspfw-file-review" id="mwpspfw-file-review"
+			data-supported="<?php echo $supported ? '1' : '0'; ?>"
+			data-state="<?php echo esc_attr( $supported ? wp_json_encode( $settings['file_monitor'] ) : '{}' ); ?>">
+			<h4 class="ui header"><?php esc_html_e( 'File integrity review', 'mainwp-simple-performance-for-wordpress' ); ?></h4>
+			<?php if ( ! $supported ) : ?>
+				<div class="ui message">
+					<?php
+					printf(
+						/* translators: %s: minimum SPFW version for file integrity features. */
+						esc_html__( 'Reviewing file changes from the dashboard needs Simple Performance for WordPress %s or later on this site.', 'mainwp-simple-performance-for-wordpress' ),
+						esc_html( MWPSPFW_Connector::INTEGRITY_MIN_VERSION )
+					);
+					?>
+				</div>
+			<?php else : ?>
+				<p class="mwpspfw-field-description"><?php esc_html_e( 'Changes stay listed until something verifies them: the update package WordPress downloaded, wordpress.org checksums, matching copies on other managed sites, or you. Scanning never accepts a change on its own.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+				<div class="mwpspfw-file-review-body"></div>
+				<p class="mwpspfw-file-review-actions">
+					<button type="button" class="ui button mwpspfw-scan-files-btn"><?php esc_html_e( 'Scan now', 'mainwp-simple-performance-for-wordpress' ); ?></button>
+					<span class="mwpspfw-save-status mwpspfw-file-review-status" role="status"></span>
+				</p>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Shared gate for the file-review AJAX handlers.
+	 *
+	 * @return int Site ID (the request ends on failure).
+	 */
+	private function file_review_site_id() {
+		check_ajax_referer( 'mwpspfw_file_review', 'nonce' );
+
+		if ( ! function_exists( 'mainwp_current_user_can' ) || ! mainwp_current_user_can( 'dashboard', 'edit_sites' ) ) {
+			wp_send_json_error( array( 'message' => __( 'You do not have permission to edit this site.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$site_id = isset( $_POST['site_id'] ) ? intval( $_POST['site_id'] ) : 0;
+		if ( ! $site_id ) {
+			wp_send_json_error( array( 'message' => __( 'No site selected.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		return $site_id;
+	}
+
+	/**
+	 * Send a file-review connector result back to the browser.
+	 *
+	 * @param array $result Connector result.
+	 */
+	private function send_file_review_result( array $result ) {
+		if ( ! $result['ok'] ) {
+			wp_send_json_error(
+				array(
+					'message'    => $result['message'],
+					'error_type' => $result['error_type'],
+					'code'       => isset( $result['code'] ) ? $result['code'] : '',
+				)
+			);
+		}
+
+		$payload = isset( $result['data']['data'] ) && is_array( $result['data']['data'] ) ? $result['data']['data'] : array();
+
+		wp_send_json_success(
+			array(
+				'file_monitor' => isset( $payload['file_monitor'] ) ? $payload['file_monitor'] : null,
+			)
+		);
+	}
+
+	/**
+	 * AJAX handler backing Scan now on the File integrity review block.
+	 */
+	public function ajax_scan_files() {
+		$site_id = $this->file_review_site_id();
+
+		$this->send_file_review_result( MWPSPFW_Connector::scan_files( $site_id ) );
+	}
+
+	/**
+	 * AJAX handler backing Mark as verified on the File integrity review
+	 * block. The child rescans and refuses if the scope's files changed since
+	 * the signature was issued.
+	 */
+	public function ajax_verify_files() {
+		$site_id = $this->file_review_site_id();
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- verified in file_review_site_id().
+		$signature = isset( $_POST['signature'] ) ? sanitize_text_field( wp_unslash( $_POST['signature'] ) ) : '';
+		$scope     = isset( $_POST['scope'] ) ? sanitize_text_field( wp_unslash( $_POST['scope'] ) ) : 'all';
+		// phpcs:enable
+
+		if ( 'all' !== $scope && 'uploads' !== $scope && ! preg_match( '/^[A-Za-z0-9._-]+$/', $scope ) ) {
+			wp_send_json_error( array( 'message' => __( 'Unknown verification scope.', 'mainwp-simple-performance-for-wordpress' ) ) );
+		}
+
+		$this->send_file_review_result( MWPSPFW_Connector::verify_files( $site_id, $signature, $scope ) );
 	}
 
 	/**

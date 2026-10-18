@@ -286,3 +286,85 @@
 	border-color: inherit;
 	border-radius: 4px;
 }
+
+/* ─── File integrity review (per-site Hardening tab) ───────────────────── */
+
+.mwpspfw-file-review {
+	margin-top: 1.5em;
+}
+
+.mwpspfw-file-review-meta {
+	font-size: 0.9em;
+	opacity: 0.85;
+}
+
+.mwpspfw-file-review-group {
+	margin: 0.75em 0;
+}
+
+.mwpspfw-file-review-group-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5em;
+}
+
+.mwpspfw-file-review-group-head .button {
+	margin-left: auto;
+}
+
+.mwpspfw-file-list {
+	margin: 0.4em 0 0;
+	padding-left: 1.25em;
+	max-height: 240px;
+	overflow: auto;
+}
+
+.mwpspfw-file-list li {
+	word-break: break-all;
+}
+
+.mwpspfw-file-change {
+	display: inline-block;
+	min-width: 5.5em;
+	font-size: 0.85em;
+	text-transform: uppercase;
+	opacity: 0.75;
+}
+
+/* ─── Fleet file integrity (overview) ──────────────────────────────────── */
+
+.mwpspfw-fleet-table td {
+	vertical-align: top;
+}
+
+.mwpspfw-fleet-version {
+	opacity: 0.75;
+}
+
+.mwpspfw-fleet-outliers,
+.mwpspfw-fleet-variants,
+.mwpspfw-fleet-uploads,
+.mwpspfw-fleet-skipped,
+.mwpspfw-fleet-consensus-results {
+	margin: 0.25em 0;
+	padding-left: 1.25em;
+}
+
+.mwpspfw-fleet-outlier {
+	margin-bottom: 0.4em;
+}
+
+.mwpspfw-fleet-diff:not(:empty) {
+	margin-top: 0.4em;
+}
+
+.mwpspfw-fleet-pending,
+.mwpspfw-fleet-consensus {
+	margin-top: 0.5em;
+}
+
+.mwpspfw-fleet-meta {
+	font-size: 0.9em;
+	opacity: 0.85;
+}

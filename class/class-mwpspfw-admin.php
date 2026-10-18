@@ -59,6 +59,12 @@ class MWPSPFW_Admin {
 		add_action( 'wp_ajax_mwpspfw_install_spfw', array( MWPSPFW_Overview::get_instance(), 'ajax_install' ) );
 		add_action( 'wp_ajax_mwpspfw_get_log', array( MWPSPFW_Overview::get_instance(), 'ajax_get_log' ) );
 		add_action( 'wp_ajax_mwpspfw_clear_log', array( MWPSPFW_Overview::get_instance(), 'ajax_clear_log' ) );
+		add_action( 'wp_ajax_mwpspfw_scan_files', array( MWPSPFW_Individual::get_instance(), 'ajax_scan_files' ) );
+		add_action( 'wp_ajax_mwpspfw_verify_files', array( MWPSPFW_Individual::get_instance(), 'ajax_verify_files' ) );
+		add_action( 'wp_ajax_mwpspfw_integrity_collect', array( MWPSPFW_Integrity::get_instance(), 'ajax_collect' ) );
+		add_action( 'wp_ajax_mwpspfw_integrity_analyze', array( MWPSPFW_Integrity::get_instance(), 'ajax_analyze' ) );
+		add_action( 'wp_ajax_mwpspfw_integrity_diff', array( MWPSPFW_Integrity::get_instance(), 'ajax_diff' ) );
+		add_action( 'wp_ajax_mwpspfw_integrity_consensus', array( MWPSPFW_Integrity::get_instance(), 'ajax_consensus' ) );
 	}
 
 	/**
@@ -98,6 +104,8 @@ class MWPSPFW_Admin {
 				'uploadNonce'    => wp_create_nonce( 'mwpspfw_upload_package' ),
 				'installNonce'   => wp_create_nonce( 'mwpspfw_install_spfw' ),
 				'logNonce'       => wp_create_nonce( 'mwpspfw_debug_log' ),
+				'fileReviewNonce' => wp_create_nonce( 'mwpspfw_file_review' ),
+				'integrityNonce' => wp_create_nonce( 'mwpspfw_integrity' ),
 				'confirmUnsaved' => __( 'You have unsaved changes. Leave this page anyway?', 'mainwp-simple-performance-for-wordpress' ),
 				'confirmInstall' => __( 'Install (or reinstall/upgrade) Simple Performance for WordPress on this site now?', 'mainwp-simple-performance-for-wordpress' ),
 				'saving'         => __( 'Saving…', 'mainwp-simple-performance-for-wordpress' ),
@@ -121,6 +129,86 @@ class MWPSPFW_Admin {
 					'altered'     => __( 'File modified', 'mainwp-simple-performance-for-wordpress' ),
 					'unsupported' => __( 'Not available on this server', 'mainwp-simple-performance-for-wordpress' ),
 					'advisory'    => __( 'Needs server config', 'mainwp-simple-performance-for-wordpress' ),
+				),
+				'fileReview'     => array(
+					/* translators: 1: last scan time, 2: number of files in the verified baseline. */
+					'lastScan'           => __( 'Last scan: %1$s · %2$d files in the verified baseline', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: 1: time, 2: how it was verified. */
+					'lastVerified'       => __( 'Last verified %1$s (%2$s)', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %s: user display name. */
+					'byUser'             => __( ' by %s', 'mainwp-simple-performance-for-wordpress' ),
+					'never'              => __( 'never', 'mainwp-simple-performance-for-wordpress' ),
+					'nothingPending'     => __( 'Nothing is waiting for review.', 'mainwp-simple-performance-for-wordpress' ),
+					'uploadsScope'       => __( 'Uploads', 'mainwp-simple-performance-for-wordpress' ),
+					'allScope'           => __( 'everything listed', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: 1: previous version, 2: new version. */
+					'unverifiedUpdate'   => __( 'Update %1$s → %2$s could not be verified', 'mainwp-simple-performance-for-wordpress' ),
+					'markVerified'       => __( 'Mark as verified', 'mainwp-simple-performance-for-wordpress' ),
+					'markAllVerified'    => __( 'Mark all as verified', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %s: plugin slug, "Uploads", or "everything listed". */
+					'confirmVerify'      => __( 'Accept the current files for %s into this site\'s verified baseline? Only do this once you know the changes are legitimate.', 'mainwp-simple-performance-for-wordpress' ),
+					'scanning'           => __( 'Scanning…', 'mainwp-simple-performance-for-wordpress' ),
+					'verifying'          => __( 'Verifying…', 'mainwp-simple-performance-for-wordpress' ),
+					'done'               => __( 'Updated.', 'mainwp-simple-performance-for-wordpress' ),
+					'changedSinceReview' => __( 'The files changed since this list was loaded. Scan again and review the new list.', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %d: number of file changes. */
+					'pendingCount'       => __( '%d file changes to review', 'mainwp-simple-performance-for-wordpress' ),
+					'types'              => array(
+						'added'    => __( 'added', 'mainwp-simple-performance-for-wordpress' ),
+						'modified' => __( 'modified', 'mainwp-simple-performance-for-wordpress' ),
+						'removed'  => __( 'removed', 'mainwp-simple-performance-for-wordpress' ),
+					),
+					'sources'            => array(
+						'manual'    => __( 'marked as verified on the site', 'mainwp-simple-performance-for-wordpress' ),
+						'mainwp'    => __( 'marked as verified from this dashboard', 'mainwp-simple-performance-for-wordpress' ),
+						'consensus' => __( 'matched the same version on other managed sites', 'mainwp-simple-performance-for-wordpress' ),
+						'package'   => __( 'matched the update package', 'mainwp-simple-performance-for-wordpress' ),
+						'wporg'     => __( 'matched wordpress.org checksums', 'mainwp-simple-performance-for-wordpress' ),
+						'initial'   => __( 'first scan', 'mainwp-simple-performance-for-wordpress' ),
+					),
+				),
+				'fleet'          => array(
+					/* translators: 1: current site number, 2: total sites. */
+					'collecting'      => __( 'Fingerprinting site %1$d of %2$d…', 'mainwp-simple-performance-for-wordpress' ),
+					'analyzing'       => __( 'Comparing…', 'mainwp-simple-performance-for-wordpress' ),
+					'noSites'         => __( 'No sites to compare.', 'mainwp-simple-performance-for-wordpress' ),
+					'noReport'        => __( 'No comparison has been run yet.', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: 1: time, 2: user, 3: number of sites compared. */
+					'reportMeta'      => __( 'Last compared %1$s by %2$s · %3$d sites', 'mainwp-simple-performance-for-wordpress' ),
+					'allConsistent'   => __( 'Every plugin version that runs on more than one site has identical files everywhere.', 'mainwp-simple-performance-for-wordpress' ),
+					'colPlugin'       => __( 'Plugin', 'mainwp-simple-performance-for-wordpress' ),
+					'colSites'        => __( 'Sites', 'mainwp-simple-performance-for-wordpress' ),
+					'colVerdict'      => __( 'Result', 'mainwp-simple-performance-for-wordpress' ),
+					'colDetail'       => __( 'Details', 'mainwp-simple-performance-for-wordpress' ),
+					'verdicts'        => array(
+						'outlier'     => __( 'Differs on some sites', 'mainwp-simple-performance-for-wordpress' ),
+						'no_majority' => __( 'Copies differ, no majority', 'mainwp-simple-performance-for-wordpress' ),
+						'consistent'  => __( 'Identical', 'mainwp-simple-performance-for-wordpress' ),
+						'single'      => __( 'Only one site', 'mainwp-simple-performance-for-wordpress' ),
+					),
+					'noMajorityHelp'  => __( 'Too few sites agree to say which copy is expected. Review each site by hand.', 'mainwp-simple-performance-for-wordpress' ),
+					'outlierLabel'    => __( 'Differs:', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %d: number of sites. */
+					'pendingLabel'    => __( '%d with changes waiting for review', 'mainwp-simple-performance-for-wordpress' ),
+					'showDiff'        => __( 'Show differences', 'mainwp-simple-performance-for-wordpress' ),
+					'loadingDiff'     => __( 'Loading…', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %s: reference site name. */
+					'diffAgainst'     => __( 'Compared with %s:', 'mainwp-simple-performance-for-wordpress' ),
+					'diffNone'        => __( 'No file differences found now. The site may have changed since the comparison; run it again.', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %d: number of sites. */
+					'verifyButton'    => __( 'Mark verified on %d matching sites', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: 1: plugin slug, 2: version, 3: number of agreeing sites, 4: number of sites to verify, 5: outlier list or "none". */
+					'confirmConsensus' => __( "Verify %1\$s %2\$s on %4\$d sites because %3\$d sites run identical files?\n\nExcluded (differ): %5\$s\n\nMatching copies are not proof the files are clean: if every site was changed the same way, the majority is the change. Only continue if you trust this version.", 'mainwp-simple-performance-for-wordpress' ),
+					'none'            => __( 'none', 'mainwp-simple-performance-for-wordpress' ),
+					'verifyingSite'   => __( 'Verifying…', 'mainwp-simple-performance-for-wordpress' ),
+					'verifiedSite'    => __( 'verified', 'mainwp-simple-performance-for-wordpress' ),
+					'changedSince'    => __( 'changed since the comparison; run it again', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %d: number of sites. */
+					'skippedLabel'    => __( '%d sites skipped:', 'mainwp-simple-performance-for-wordpress' ),
+					/* translators: %d: number of PHP file changes. */
+					'uploadsPending'  => __( '%d PHP changes in uploads waiting for review', 'mainwp-simple-performance-for-wordpress' ),
+					'uploadsHeading'  => __( 'Uploads (not comparable across sites)', 'mainwp-simple-performance-for-wordpress' ),
+					'openSite'        => __( 'Open site', 'mainwp-simple-performance-for-wordpress' ),
 				),
 			)
 		);
