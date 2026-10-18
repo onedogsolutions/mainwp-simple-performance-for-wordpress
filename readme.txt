@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -70,6 +70,9 @@ No. One-shot operations (database scan/cleanup, font scan, htaccess verification
 
 == Changelog ==
 
+= 1.6.1 =
+* Fixed: counts now read correctly in the singular ("1 matching site", "1 site skipped", "1 file change to review") on the File integrity review and Fleet File Integrity screens. The consensus confirmation now lists its counts as labelled lines.
+
 = 1.6.0 =
 * New: Fleet File Integrity on the Extensions page. Compares each plugin version's files across your sites (one fingerprint per plugin per site) and flags the site whose copy differs from the majority, which is usually how an infected site is found. "Show differences" lists exactly which files were added, modified, or removed against a majority site.
 * New: consensus verification. Where at least three sites run identical copies of a plugin version and some of them still have that plugin waiting for review (for example a premium plugin copied in by SFTP), an administrator can verify those sites in one confirmed step. Each site rechecks its own files and refuses if they no longer match.
@@ -132,6 +135,9 @@ No. One-shot operations (database scan/cleanup, font scan, htaccess verification
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.6.1 =
+Wording fix for counts on the file integrity screens.
 
 = 1.6.0 =
 Fleet file integrity comparison and per-site file review. These need SPFW 2.21.0+ on child sites; settings management still works from 2.17.0.

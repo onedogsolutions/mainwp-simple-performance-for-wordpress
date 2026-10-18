@@ -90,6 +90,17 @@
 		} );
 	}
 
+	/**
+	 * Pick the singular or plural form of a localized {one, other} pair.
+	 * A plain string passes through unchanged.
+	 */
+	function plural( forms, n ) {
+		if ( forms && 'object' === typeof forms ) {
+			return 1 === Number( n ) ? forms.one : forms.other;
+		}
+		return forms;
+	}
+
 	function formatTime( seconds ) {
 		return seconds ? new Date( seconds * 1000 ).toLocaleString() : ( admin.fileReview ? admin.fileReview.never : '' );
 	}
@@ -455,7 +466,7 @@
 
 		var verified = state.verified || {};
 		var meta = el( 'p', 'mwpspfw-file-review-meta' );
-		meta.appendChild( el( 'span', '', fmt( t.lastScan, formatTime( state.last_scan ), state.snapshot_count || 0 ) ) );
+		meta.appendChild( el( 'span', '', fmt( plural( t.lastScan, state.snapshot_count || 0 ), formatTime( state.last_scan ), state.snapshot_count || 0 ) ) );
 		if ( verified.time ) {
 			var source = ( t.sources && t.sources[ verified.source ] ) || verified.source || '';
 			var who = verified.user ? fmt( t.byUser, verified.user ) : '';
@@ -640,7 +651,7 @@
 							parts.push( 'Fonts localized' );
 						}
 						if ( d.integrity_pending ) {
-							parts.push( fmt( admin.fileReview && admin.fileReview.pendingCount, d.integrity_pending ) );
+							parts.push( fmt( plural( admin.fileReview && admin.fileReview.pendingCount, d.integrity_pending ), d.integrity_pending ) );
 						}
 						statusCell.textContent = parts.length ? parts.join( ' · ' ) : '✓';
 					} else if ( statusCell ) {
@@ -905,7 +916,7 @@
 
 		function consensusControl( group ) {
 			var wrap = el( 'div', 'mwpspfw-fleet-consensus' );
-			var btn = el( 'button', 'ui mini green button', fmt( t.verifyButton, group.verifiable.length ) );
+			var btn = el( 'button', 'ui mini green button', fmt( plural( t.verifyButton, group.verifiable.length ), group.verifiable.length ) );
 			btn.type = 'button';
 			var results = el( 'ul', 'mwpspfw-fleet-consensus-results' );
 
@@ -922,7 +933,7 @@
 				function next() {
 					if ( ! queue.length ) {
 						btn.disabled = ! group.verifiable.length;
-						btn.textContent = fmt( t.verifyButton, group.verifiable.length );
+						btn.textContent = fmt( plural( t.verifyButton, group.verifiable.length ), group.verifiable.length );
 						btn.hidden = ! group.verifiable.length;
 						return;
 					}
@@ -1015,7 +1026,7 @@
 				return;
 			}
 
-			out.appendChild( el( 'p', 'mwpspfw-fleet-meta', fmt( t.reportMeta, formatTime( report.time ), report.user || '', report.sites_compared || 0 ) ) );
+			out.appendChild( el( 'p', 'mwpspfw-fleet-meta', fmt( plural( t.reportMeta, report.sites_compared || 0 ), formatTime( report.time ), report.user || '', report.sites_compared || 0 ) ) );
 
 			// Only rows that need a look; identical and single-site versions
 			// are summarized.
@@ -1064,7 +1075,7 @@
 				Object.keys( uploads ).forEach( function ( id ) {
 					var li = el( 'li' );
 					li.appendChild( siteLink( id ) );
-					li.appendChild( document.createTextNode( ': ' + fmt( t.uploadsPending, uploads[ id ] ) ) );
+					li.appendChild( document.createTextNode( ': ' + fmt( plural( t.uploadsPending, uploads[ id ] ), uploads[ id ] ) ) );
 					ul.appendChild( li );
 				} );
 				out.appendChild( ul );
@@ -1073,7 +1084,7 @@
 			var skipped = report.skipped || {};
 			var skippedIds = Object.keys( skipped );
 			if ( skippedIds.length ) {
-				out.appendChild( el( 'p', 'mwpspfw-fleet-skipped-head', fmt( t.skippedLabel, skippedIds.length ) ) );
+				out.appendChild( el( 'p', 'mwpspfw-fleet-skipped-head', fmt( plural( t.skippedLabel, skippedIds.length ), skippedIds.length ) ) );
 				var sl = el( 'ul', 'mwpspfw-fleet-skipped' );
 				skippedIds.forEach( function ( id ) {
 					var li = el( 'li' );

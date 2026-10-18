@@ -131,8 +131,13 @@ class MWPSPFW_Admin {
 					'advisory'    => __( 'Needs server config', 'mainwp-simple-performance-for-wordpress' ),
 				),
 				'fileReview'     => array(
-					/* translators: 1: last scan time, 2: number of files in the verified baseline. */
-					'lastScan'           => __( 'Last scan: %1$s · %2$d files in the verified baseline', 'mainwp-simple-performance-for-wordpress' ),
+					// Count-bearing strings are {one, other} pairs; plural() in the JS picks one.
+					'lastScan'           => array(
+						/* translators: 1: last scan time, 2: number of files in the verified baseline. */
+						'one'   => __( 'Last scan: %1$s · %2$d file in the verified baseline', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: 1: last scan time, 2: number of files in the verified baseline. */
+						'other' => __( 'Last scan: %1$s · %2$d files in the verified baseline', 'mainwp-simple-performance-for-wordpress' ),
+					),
 					/* translators: 1: time, 2: how it was verified. */
 					'lastVerified'       => __( 'Last verified %1$s (%2$s)', 'mainwp-simple-performance-for-wordpress' ),
 					/* translators: %s: user display name. */
@@ -151,8 +156,12 @@ class MWPSPFW_Admin {
 					'verifying'          => __( 'Verifying…', 'mainwp-simple-performance-for-wordpress' ),
 					'done'               => __( 'Updated.', 'mainwp-simple-performance-for-wordpress' ),
 					'changedSinceReview' => __( 'The files changed since this list was loaded. Scan again and review the new list.', 'mainwp-simple-performance-for-wordpress' ),
-					/* translators: %d: number of file changes. */
-					'pendingCount'       => __( '%d file changes to review', 'mainwp-simple-performance-for-wordpress' ),
+					'pendingCount'       => array(
+						/* translators: %d: number of file changes. */
+						'one'   => __( '%d file change to review', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: %d: number of file changes. */
+						'other' => __( '%d file changes to review', 'mainwp-simple-performance-for-wordpress' ),
+					),
 					'types'              => array(
 						'added'    => __( 'added', 'mainwp-simple-performance-for-wordpress' ),
 						'modified' => __( 'modified', 'mainwp-simple-performance-for-wordpress' ),
@@ -173,8 +182,12 @@ class MWPSPFW_Admin {
 					'analyzing'       => __( 'Comparing…', 'mainwp-simple-performance-for-wordpress' ),
 					'noSites'         => __( 'No sites to compare.', 'mainwp-simple-performance-for-wordpress' ),
 					'noReport'        => __( 'No comparison has been run yet.', 'mainwp-simple-performance-for-wordpress' ),
-					/* translators: 1: time, 2: user, 3: number of sites compared. */
-					'reportMeta'      => __( 'Last compared %1$s by %2$s · %3$d sites', 'mainwp-simple-performance-for-wordpress' ),
+					'reportMeta'      => array(
+						/* translators: 1: time, 2: user, 3: number of sites compared. */
+						'one'   => __( 'Last compared %1$s by %2$s · %3$d site', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: 1: time, 2: user, 3: number of sites compared. */
+						'other' => __( 'Last compared %1$s by %2$s · %3$d sites', 'mainwp-simple-performance-for-wordpress' ),
+					),
 					'allConsistent'   => __( 'Every plugin version that runs on more than one site has identical files everywhere.', 'mainwp-simple-performance-for-wordpress' ),
 					'colPlugin'       => __( 'Plugin', 'mainwp-simple-performance-for-wordpress' ),
 					'colSites'        => __( 'Sites', 'mainwp-simple-performance-for-wordpress' ),
@@ -195,18 +208,30 @@ class MWPSPFW_Admin {
 					/* translators: %s: reference site name. */
 					'diffAgainst'     => __( 'Compared with %s:', 'mainwp-simple-performance-for-wordpress' ),
 					'diffNone'        => __( 'No file differences found now. The site may have changed since the comparison; run it again.', 'mainwp-simple-performance-for-wordpress' ),
-					/* translators: %d: number of sites. */
-					'verifyButton'    => __( 'Mark verified on %d matching sites', 'mainwp-simple-performance-for-wordpress' ),
+					'verifyButton'    => array(
+						/* translators: %d: number of sites. */
+						'one'   => __( 'Mark verified on %d matching site', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: %d: number of sites. */
+						'other' => __( 'Mark verified on %d matching sites', 'mainwp-simple-performance-for-wordpress' ),
+					),
 					/* translators: 1: plugin slug, 2: version, 3: number of agreeing sites, 4: number of sites to verify, 5: outlier list or "none". */
-					'confirmConsensus' => __( "Verify %1\$s %2\$s on %4\$d sites because %3\$d sites run identical files?\n\nExcluded (differ): %5\$s\n\nMatching copies are not proof the files are clean: if every site was changed the same way, the majority is the change. Only continue if you trust this version.", 'mainwp-simple-performance-for-wordpress' ),
+					'confirmConsensus' => __( "Verify %1\$s %2\$s on the matching sites still waiting for review?\n\nSites with identical files: %3\$d\nSites to verify: %4\$d\nExcluded (differ): %5\$s\n\nMatching copies are not proof the files are clean: if every site was changed the same way, the majority is the change. Only continue if you trust this version.", 'mainwp-simple-performance-for-wordpress' ),
 					'none'            => __( 'none', 'mainwp-simple-performance-for-wordpress' ),
 					'verifyingSite'   => __( 'Verifying…', 'mainwp-simple-performance-for-wordpress' ),
 					'verifiedSite'    => __( 'verified', 'mainwp-simple-performance-for-wordpress' ),
 					'changedSince'    => __( 'changed since the comparison; run it again', 'mainwp-simple-performance-for-wordpress' ),
-					/* translators: %d: number of sites. */
-					'skippedLabel'    => __( '%d sites skipped:', 'mainwp-simple-performance-for-wordpress' ),
-					/* translators: %d: number of PHP file changes. */
-					'uploadsPending'  => __( '%d PHP changes in uploads waiting for review', 'mainwp-simple-performance-for-wordpress' ),
+					'skippedLabel'    => array(
+						/* translators: %d: number of sites. */
+						'one'   => __( '%d site skipped:', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: %d: number of sites. */
+						'other' => __( '%d sites skipped:', 'mainwp-simple-performance-for-wordpress' ),
+					),
+					'uploadsPending'  => array(
+						/* translators: %d: number of PHP file changes. */
+						'one'   => __( '%d PHP change in uploads waiting for review', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: %d: number of PHP file changes. */
+						'other' => __( '%d PHP changes in uploads waiting for review', 'mainwp-simple-performance-for-wordpress' ),
+					),
 					'uploadsHeading'  => __( 'Uploads (not comparable across sites)', 'mainwp-simple-performance-for-wordpress' ),
 					'openSite'        => __( 'Open site', 'mainwp-simple-performance-for-wordpress' ),
 				),

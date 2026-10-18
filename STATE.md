@@ -90,8 +90,65 @@ decisions log 2026-10-18).
   uploads counts; outlier sorted first; `diff()`. 14/14 pass.
 - Child 2.21.0: 268 PHPUnit (10 new in `tests/MainWP_Bridge_Test.php`),
   47 Jest, `npm run build`, `.pot` regenerated, ZIP built.
-- **Not verified:** nothing has run against a live MainWP Dashboard or child
-  site, and no screen has been seen in a browser. See Next Steps.
+### Live QA (2026-10-18, mainwp.onedog.solutions → test.onedog.solutions, site 194)
+
+Deployed SPFW 2.21.0 to the test site via `wp plugin install --force` (the
+upgrader package-verified it: baseline source `package`, nothing pending) and
+1.6.0 to the dashboard. Both sites' OPcache revalidates every 60 s, so plugin
+files were invalidated by hand after each install. Note: a package ZIP placed
+in `wp-content/upgrade/` is deleted by the upgrader before it unpacks; stage
+it elsewhere.
+
+- Connector against the real child: get_settings carries
+  `root_hardening_status` and `file_monitor`; fingerprints for 31 plugins in
+  1.8 s; plugin_files OK; `../wp-config.php` slug refused (`spfw_bad_scope`);
+  stale signature refused (`spfw_files_changed`); a 2.17 site maps to
+  `unsupported`.
+- Per-site tab (browser): review block renders in MainWP's dark theme; Scan
+  now picked up a planted fixture plugin; Mark as verified after an edit
+  made post-load was refused with the "files changed" message; after a
+  rescan it succeeded, and the child recorded source `mainwp` by
+  `onedogsolutions`. Root badge "Active" beside Protect Sensitive Files.
+  A 2.17 site shows the "needs 2.21.0" notice and still renders its form.
+- Settings save: repeat saves are exact no-ops on the child option. The
+  first save after the 2.21.0 upgrade changed the option hash; only a hash
+  was taken beforehand, so the changed key could not be identified. A
+  reproduction with `version` reset to 2.20.0 changed only `version`.
+- Fleet (browser): real run over 194 + two staging sites: 194 compared, a
+  2.17 site skipped with the "needs 2.21.0" reason, a site with SPFW inactive
+  skipped as bridge-missing.
+- Multi-site verdicts used site 194's real fingerprints plus three
+  synthetic site IDs (900001–900003) written into the run, since 194 is the
+  only child on 2.21.0. Verdict `outlier`, 900003 flagged and excluded,
+  only 194 verifiable. Consensus after tampering the file post-comparison
+  was refused by the child; after restoring it, consensus succeeded and the
+  child recorded source `consensus`. A forged consensus request for the
+  outlier was refused server-side; bad nonce → -1. Show differences against
+  a nonexistent site shows MainWP's error cleanly.
+- Overview Check returns `integrity_pending`.
+- Cleanup: fixture deleted via WP-CLI (`deleted_plugin` dropped its
+  entries; baseline back to 17,530), synthetic report and uploaded ZIPs
+  removed. The test site's pre-existing Google Security 2.30.1 → 2.31.1
+  unverified update was left pending, untouched.
+
+**Not covered live:** Show differences between two real sites, and
+consensus across three real children — both need more sites on 2.21.0.
+
+### 1.6.1 (count wording)
+
+QA found counts with no singular ("Mark verified on 1 matching sites",
+"· 1 sites"). Count-bearing strings in the `fileReview`/`fleet` localized
+maps are now `{one, other}` pairs and a JS `plural( forms, n )` helper picks
+one (a plain string passes through). The consensus confirm, which carried two
+counts in one sentence, now lists them as labelled lines. Verified live: "1
+matching site", "1 site", "1 site skipped:", "1 PHP change in uploads…",
+"1 file change to review", "17530 files…".
+
+**Shipped as a version bump, not a re-cut of 1.6.0, on purpose.** Redeploying
+the change under 1.6.0 rendered `[object Object]`: the browser kept its
+cached `mwpspfw-admin.js?ver=1.6.0` (old code) while PHP localized the new
+pair shape. Any change to the JS or to the shape of `mwpspfwAdmin` must bump
+`MWPSPFW_VERSION`, which is the asset cache key.
 
 ## Historical Phase: Phase 8 (Full settings parity with SPFW v2.17.0, v1.5.0)
 
