@@ -1028,6 +1028,11 @@
 
 			out.appendChild( el( 'p', 'mwpspfw-fleet-meta', fmt( plural( t.reportMeta, report.sites_compared || 0 ), formatTime( report.time ), report.user || '', report.sites_compared || 0 ) ) );
 
+			var fromSync = report.from_sync ? Object.keys( report.from_sync ).length : 0;
+			if ( fromSync ) {
+				out.appendChild( el( 'p', 'mwpspfw-fleet-meta', fmt( plural( t.fromSync, fromSync ), fromSync ) ) );
+			}
+
 			// Only rows that need a look; identical and single-site versions
 			// are summarized.
 			var shown = report.groups.filter( function ( g ) {

@@ -3,7 +3,7 @@
  * Plugin Name: MainWP for Simple Performance for WordPress
  * Plugin URI: https://onedog.solutions/
  * Description: Configure the Simple Performance for WordPress plugin on each connected child site directly from the MainWP Dashboard. Manage core optimizations, REST API restrictions, hardening, fonts, WooCommerce tweaks, and database cleanup per site.
- * Version: 1.6.1
+ * Version: 1.6.2
  * Author: One Dog Solutions
  * Author URI: https://onedog.solutions/
  * Requires at least: 5.8
@@ -34,7 +34,7 @@ if ( ! defined( 'MWPSPFW_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'MWPSPFW_VERSION' ) ) {
-	define( 'MWPSPFW_VERSION', '1.6.1' );
+	define( 'MWPSPFW_VERSION', '1.6.2' );
 }
 
 /**
@@ -214,6 +214,9 @@ class MWPSPFW_Activator {
 		$this->mainwpMainActivated = apply_filters( 'mainwp_activated_check', $this->mainwpMainActivated );
 		$this->childEnabled        = apply_filters( 'mainwp_extension_enabled_check', __FILE__ );
 		$this->childKey            = is_array( $this->childEnabled ) && isset( $this->childEnabled['key'] ) ? $this->childEnabled['key'] : false;
+
+		// Before the user check: scheduled syncs run from cron with no user.
+		MWPSPFW_Sync::init();
 
 		if ( function_exists( 'mainwp_current_user_can' ) && ! mainwp_current_user_can( 'extension', $this->plugin_handle ) ) {
 			return;

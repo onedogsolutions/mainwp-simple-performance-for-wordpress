@@ -20,6 +20,10 @@
  * Collection runs in the browser, one site per request (like bulk install),
  * so a large fleet never hits a PHP timeout.
  *
+ * A site whose last MainWP sync fingerprinted it within the hour (SPFW
+ * 2.21.1+, see MWPSPFW_Sync) is compared from that sync instead of being
+ * asked again; every other site is fingerprinted live.
+ *
  * @package MainWP/Extensions/SPFW
  */
 
@@ -95,13 +99,15 @@ class MWPSPFW_Integrity {
 	 *
 	 * @param array<int|string,array> $site_results Site ID => either
 	 *        {plugins: slug => {version, fingerprint, count, pending},
-	 *        uploads_pending: int} or {skipped: reason}.
-	 * @return array{groups:array,skipped:array<string,string>,uploads_pending:array<string,int>,sites_compared:int}
+	 *        uploads_pending: int, from_sync?: fingerprint time when the
+	 *        entry came from the last sync} or {skipped: reason}.
+	 * @return array{groups:array,skipped:array<string,string>,uploads_pending:array<string,int>,from_sync:array<string,int>,sites_compared:int}
 	 */
 	public static function analyze( array $site_results ) {
 		$buckets         = array();
 		$skipped         = array();
 		$uploads_pending = array();
+		$from_sync       = array();
 		$compared        = 0;
 
 		foreach ( $site_results as $site_id => $result ) {
@@ -116,6 +122,10 @@ class MWPSPFW_Integrity {
 
 			if ( ! empty( $result['uploads_pending'] ) ) {
 				$uploads_pending[ $site_id ] = (int) $result['uploads_pending'];
+			}
+
+			if ( ! empty( $result['from_sync'] ) ) {
+				$from_sync[ $site_id ] = (int) $result['from_sync'];
 			}
 
 			foreach ( $result['plugins'] as $slug => $plugin ) {
@@ -172,6 +182,7 @@ class MWPSPFW_Integrity {
 			'groups'          => $groups,
 			'skipped'         => $skipped,
 			'uploads_pending' => $uploads_pending,
+			'from_sync'       => $from_sync,
 			'sites_compared'  => $compared,
 		);
 	}
@@ -339,7 +350,9 @@ class MWPSPFW_Integrity {
 
 	/**
 	 * AJAX: fingerprint one site and record it in the run in progress.
-	 * `run_id` names the run; a new run_id starts over.
+	 * `run_id` names the run; a new run_id starts over. A site whose last
+	 * sync fingerprinted it within MWPSPFW_Sync::FINGERPRINT_MAX_AGE is not
+	 * asked again; any other site is fingerprinted live, as before.
 	 */
 	public function ajax_collect() {
 		$this->gate();
@@ -361,15 +374,27 @@ class MWPSPFW_Integrity {
 			);
 		}
 
-		$result = MWPSPFW_Connector::plugin_fingerprints( $site_id );
+		// Fingerprints from a recent sync stand in for asking the site again.
+		// Consensus verification still has the site recheck its own disk.
+		$stored = MWPSPFW_Sync::fresh_fingerprints( MWPSPFW_Sync::get( $site_id ), time() );
 
-		if ( $result['ok'] && isset( $result['data']['data']['plugins'] ) && is_array( $result['data']['data']['plugins'] ) ) {
+		if ( null !== $stored ) {
 			$entry = array(
-				'plugins'         => $result['data']['data']['plugins'],
-				'uploads_pending' => isset( $result['data']['data']['uploads_pending'] ) ? (int) $result['data']['data']['uploads_pending'] : 0,
+				'plugins'         => $stored['plugins'],
+				'uploads_pending' => $stored['uploads_pending'],
+				'from_sync'       => $stored['fingerprinted'],
 			);
 		} else {
-			$entry = array( 'skipped' => $result['ok'] ? __( 'Unexpected response.', 'mainwp-simple-performance-for-wordpress' ) : $result['message'] );
+			$result = MWPSPFW_Connector::plugin_fingerprints( $site_id );
+
+			if ( $result['ok'] && isset( $result['data']['data']['plugins'] ) && is_array( $result['data']['data']['plugins'] ) ) {
+				$entry = array(
+					'plugins'         => $result['data']['data']['plugins'],
+					'uploads_pending' => isset( $result['data']['data']['uploads_pending'] ) ? (int) $result['data']['data']['uploads_pending'] : 0,
+				);
+			} else {
+				$entry = array( 'skipped' => $result['ok'] ? __( 'Unexpected response.', 'mainwp-simple-performance-for-wordpress' ) : $result['message'] );
+			}
 		}
 
 		$run['sites'][ $site_id ] = $entry;
@@ -377,8 +402,9 @@ class MWPSPFW_Integrity {
 
 		wp_send_json_success(
 			array(
-				'skipped' => isset( $entry['skipped'] ) ? $entry['skipped'] : '',
-				'plugins' => isset( $entry['plugins'] ) ? count( $entry['plugins'] ) : 0,
+				'skipped'   => isset( $entry['skipped'] ) ? $entry['skipped'] : '',
+				'plugins'   => isset( $entry['plugins'] ) ? count( $entry['plugins'] ) : 0,
+				'from_sync' => ! empty( $entry['from_sync'] ),
 			)
 		);
 	}
@@ -478,6 +504,7 @@ class MWPSPFW_Integrity {
 		}
 
 		self::mark_verified_in_report( $slug, $version, $site_id );
+		MWPSPFW_Sync::forget_fingerprints( (int) $site_id );
 
 		wp_send_json_success( array( 'site_id' => $site_id ) );
 	}

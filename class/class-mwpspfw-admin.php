@@ -188,6 +188,12 @@ class MWPSPFW_Admin {
 						/* translators: 1: time, 2: user, 3: number of sites compared. */
 						'other' => __( 'Last compared %1$s by %2$s · %3$d sites', 'mainwp-simple-performance-for-wordpress' ),
 					),
+					'fromSync'        => array(
+						/* translators: %d: number of sites. */
+						'one'   => __( '%d site was compared from its last sync instead of being asked again.', 'mainwp-simple-performance-for-wordpress' ),
+						/* translators: %d: number of sites. */
+						'other' => __( '%d sites were compared from their last sync instead of being asked again.', 'mainwp-simple-performance-for-wordpress' ),
+					),
 					'allConsistent'   => __( 'Every plugin version that runs on more than one site has identical files everywhere.', 'mainwp-simple-performance-for-wordpress' ),
 					'colPlugin'       => __( 'Plugin', 'mainwp-simple-performance-for-wordpress' ),
 					'colSites'        => __( 'Sites', 'mainwp-simple-performance-for-wordpress' ),

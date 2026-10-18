@@ -130,6 +130,18 @@ it elsewhere.
   entries; baseline back to 17,530), synthetic report and uploaded ZIPs
   removed. The test site's pre-existing Google Security 2.30.1 → 2.31.1
   unverified update was left pending, untouched.
+- Re-run on dashboard 1.6.1 (connector + `analyze()` only, no writes):
+  site 194 online; get_settings carries `settings.root_hardening_status`
+  and `settings.file_monitor`; fingerprints for 31 plugins in 3.7 s, SPFW
+  2.21.0 `f9ff3363…a559ef` over 25 files, matching plugin_files' 25;
+  refusals `spfw_bad_scope`, `spfw_files_changed` and
+  `spfw_consensus_too_small` (agreeing 1). Verdicts on 194 + synthetic
+  900001–900003: consistent (194 verifiable for its pending Google
+  Security), outlier (900003 excluded, only 194 verifiable), no_majority
+  for 2 vs 2 and 1 vs 1, 2-of-3 outlier with nothing verifiable (majority
+  below MIN_SITES), single. A refused `verify_files` still runs a scan, so
+  the child's snapshot `time` moves; entries (17,530) and `verified` were
+  unchanged.
 
 **Not covered live:** Show differences between two real sites, and
 consensus across three real children — both need more sites on 2.21.0.
@@ -149,6 +161,79 @@ the change under 1.6.0 rendered `[object Object]`: the browser kept its
 cached `mwpspfw-admin.js?ver=1.6.0` (old code) while PHP localized the new
 pair shape. Any change to the JS or to the shape of `mwpspfwAdmin` must bump
 `MWPSPFW_VERSION`, which is the asset cache key.
+
+### 1.6.2 (scan at sync time; needs SPFW 2.21.1 for the new data)
+
+Live QA of 1.6.1 found a refused `verify_files` still moved the child's
+snapshot `time`; the maintainer also chose to scan when sites sync instead
+of on demand. Child side is SPFW 2.21.1 (its STATE.md, decisions log
+2026-10-18 "file-integrity scan at MainWP sync time").
+
+- **Hooks (MainWP Dashboard 6.3, `class/class-mainwp-sync.php`):**
+  `apply_filters( 'mainwp_sync_others_data', $othersData, $pWebsite )` is
+  sent to the child as `othersData`; `do_action( 'mainwp_site_synced',
+  $pWebsite, $information )` fires after a successful sync with the child's
+  full response. MainWP Child answers through
+  `mainwp_site_sync_others_data`. The "Other data" sync toggle in MainWP's
+  settings gates the whole channel.
+- **`class-mwpspfw-sync.php` (new):** `init()` registers both hooks; it is
+  called in `activate_this_plugin()` *before* the
+  `mainwp_current_user_can()` early return, because scheduled syncs run
+  from cron with no user. `request()` sets `spfwFileMonitor = 1`.
+  `store()` keeps the answer in MainWP's per-site options
+  (`mainwp_updatewebsiteoptions`, option `mwpspfw_file_monitor`, JSON):
+  `synced`, `version`, `enabled`, `error`, `file_monitor`, `plugins`,
+  `uploads_pending`, `fingerprinted`. `build_record()` (pure) keeps the
+  previous fingerprints and their time when a sync reused a recent scan,
+  and drops them when the monitor is off or the child reported an error.
+  `fresh_fingerprints()` returns them only if `fingerprinted` is within
+  `FINGERPRINT_MAX_AGE` (1 h) and the child version supports integrity.
+  `forget_fingerprints()` clears them.
+- **Fleet Compare:** `ajax_collect()` uses fresh stored fingerprints and
+  otherwise calls `plugin_fingerprints` live, as before. Entries from sync
+  carry `from_sync` (their time); `analyze()` returns a `from_sync` map and
+  the report shows "N sites were compared from their last sync". Consensus
+  still has the child recompute its own fingerprint, so a stale stored
+  fingerprint can at worst offer a verify that the child refuses.
+  Stored fingerprints are forgotten after a successful consensus verify,
+  Scan now, or Mark as verified from this dashboard (their `pending` flags
+  no longer hold).
+- **Hardening tab:** it never called `scan_files` on load; the review
+  block has always rendered from `get_settings`' `settings.file_monitor`,
+  the child's stored review state. With 2.21.1 that state is refreshed at
+  every sync, so the tab needs no stored copy: reading the child directly
+  is at least as recent as the dashboard's copy. The block now says the
+  site is scanned at each sync (only for a 2.21.1+ child with the monitor
+  on, via new `MWPSPFW_Connector::SYNC_SCAN_MIN_VERSION` /
+  `supports_sync_scan()`). Scan now stays as a manual refresh.
+- **`INTEGRITY_MIN_VERSION` stays 2.21.0.** Sync data is extra; a 2.21.0
+  child ignores the flag and keeps every on-demand action.
+- **Verified (static):** `php -l` on every PHP file, `node --check` on the
+  JS. phpcs (WordPress standard) on touched files at their HEAD counts
+  except `class-mwpspfw-admin.php` +1 warning (the new `fromSync` key's
+  arrow alignment, same as its neighbours); `class-mwpspfw-sync.php` clean.
+  No automated tests exist in this repo. `MWPSPFW_VERSION` bumped because
+  the JS changed (asset cache key, see 1.6.1).
+- **Live QA (2026-10-18, mainwp.onedog.solutions → site 194):** deployed
+  SPFW 2.21.1 and 1.6.2 via `wp plugin install --force` (the upgrader
+  package-verified SPFW; entries stayed 17,530). Passed: six refused calls
+  (stale signature for a plugin scope and for `all`, consensus agreeing 1,
+  consensus with the wrong fingerprint, bad slug, bad verify scope) left
+  the child snapshot md5 unchanged. A sync scanned (4.4–4.6 s against
+  2.0 s for a reuse) and stored 31 fingerprints identical to a live
+  `plugin_fingerprints` call. A second sync within 5 min kept the
+  fingerprints and wrote nothing on the child. A monitor-off sync stored
+  `enabled` false with no fingerprints and wrote nothing (the settings were
+  restored byte-for-byte). A 2.17.0 site (181) synced normally with no
+  record. The Hardening tab shows the sync line and the sync's scan time,
+  and loading it leaves the child untouched. Fleet Compare said "1 site was
+  compared from its last sync" with no `file_plugin_fingerprints` call;
+  after Scan now the next Compare called the site live. Staged ZIPs were
+  removed; Google Security 2.30.1 → 2.31.1 is still pending.
+  Gap: a sync that reuses a recent scan carries no fingerprints, so after
+  a scheduled scan (or a monitor-off sync, which drops them) Fleet falls
+  back to a live call until a sync runs more than 5 min after that scan.
+  Not covered: alert email at sync (needs a disposable site).
 
 ## Historical Phase: Phase 8 (Full settings parity with SPFW v2.17.0, v1.5.0)
 

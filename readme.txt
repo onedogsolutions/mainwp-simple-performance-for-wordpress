@@ -4,7 +4,7 @@ Tags: mainwp, performance, optimization, child sites, management
 Requires at least: 5.8
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,6 +28,7 @@ Installing this plugin on your MainWP Dashboard adds a "Performance" tab to each
 * MainWP Dashboard plugin (latest version)
 * Simple Performance for WordPress 2.17.0 or later on child sites (carries the bridge this extension talks to)
 * Simple Performance for WordPress 2.21.0 or later for file integrity review and fleet comparison (older sites keep full settings support and are skipped by the comparison)
+* Simple Performance for WordPress 2.21.1 or later to scan each site when it syncs (2.21.0 sites keep every on-demand action)
 
 = Features =
 
@@ -69,6 +70,11 @@ Yes. The CSP builder's 13 whitelisted directives can each be edited directly fro
 No. One-shot operations (database scan/cleanup, font scan, htaccess verification) touch the child site's filesystem and remain in the child's own admin. From MainWP you manage the cleanup targets, the automatic optimization schedule, and the font settings.
 
 == Changelog ==
+
+= 1.6.2 =
+* New: sites running SPFW 2.21.1 or later are scanned every time they sync with the dashboard, so each site's File integrity review is as recent as its last sync without anyone pressing Scan now. Scan now stays as a manual refresh.
+* New: each sync stores the site's review state and plugin fingerprints on the dashboard. Fleet File Integrity compares a site from its last sync when that sync is under an hour old, and asks the site directly otherwise; the report says how many sites came from their last sync. Consensus verification still has each site recheck its own files.
+* Changed: after Scan now, Mark as verified, or a consensus verification from the dashboard, the next comparison asks that site again instead of using its stored fingerprints.
 
 = 1.6.1 =
 * Fixed: counts now read correctly in the singular ("1 matching site", "1 site skipped", "1 file change to review") on the File integrity review and Fleet File Integrity screens. The consensus confirmation now lists its counts as labelled lines.
@@ -135,6 +141,9 @@ No. One-shot operations (database scan/cleanup, font scan, htaccess verification
 * Status check for quick overview of active optimizations.
 
 == Upgrade Notice ==
+
+= 1.6.2 =
+Sites on SPFW 2.21.1+ are scanned for file changes at every sync; Fleet File Integrity reuses recent sync data.
 
 = 1.6.1 =
 Wording fix for counts on the file integrity screens.

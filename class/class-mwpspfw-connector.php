@@ -46,6 +46,26 @@ class MWPSPFW_Connector {
 	const INTEGRITY_MIN_VERSION = '2.21.0';
 
 	/**
+	 * Minimum SPFW version that scans when MainWP syncs it and returns the
+	 * review state and plugin fingerprints in the sync response (see
+	 * MWPSPFW_Sync). Older children ignore the sync flag; every on-demand
+	 * action keeps working from INTEGRITY_MIN_VERSION.
+	 *
+	 * @var string
+	 */
+	const SYNC_SCAN_MIN_VERSION = '2.21.1';
+
+	/**
+	 * Whether a child's reported SPFW version scans at sync time.
+	 *
+	 * @param string $version Version from the bridge envelope.
+	 * @return bool
+	 */
+	public static function supports_sync_scan( $version ) {
+		return is_string( $version ) && '' !== $version && version_compare( $version, self::SYNC_SCAN_MIN_VERSION, '>=' );
+	}
+
+	/**
 	 * Whether a child's reported SPFW version carries the file-monitor actions.
 	 *
 	 * @param string $version Version from the bridge envelope.

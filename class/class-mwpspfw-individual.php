@@ -440,12 +440,20 @@ class MWPSPFW_Individual {
 	 * Scan now / Mark as verified share one renderer. It holds no named
 	 * inputs, so the settings form never posts it.
 	 *
+	 * The state is the child's stored review state as get_settings reads it;
+	 * loading the tab never scans. SPFW 2.21.1+ rescans at every MainWP sync,
+	 * so that state is never older than the site's last sync (or its
+	 * twice-daily cron scan, whichever ran later). It is the same scan the
+	 * sync stored on the dashboard (MWPSPFW_Sync), read straight from the
+	 * child, so it is never older than that copy either.
+	 *
 	 * @param array $data     The connector's 'get_settings' payload.
 	 * @param array $settings Full nested settings from the child.
 	 */
 	private function render_file_review( array $data, array $settings ) {
 		$version   = isset( $data['version'] ) ? (string) $data['version'] : '';
 		$supported = MWPSPFW_Connector::supports_integrity( $version ) && isset( $settings['file_monitor'] ) && is_array( $settings['file_monitor'] );
+		$sync_scan = $supported && MWPSPFW_Connector::supports_sync_scan( $version ) && ! empty( $settings['hardening']['file_monitor_enabled'] );
 		?>
 		<div class="ui segment mwpspfw-file-review" id="mwpspfw-file-review"
 			data-supported="<?php echo $supported ? '1' : '0'; ?>"
@@ -463,6 +471,9 @@ class MWPSPFW_Individual {
 				</div>
 			<?php else : ?>
 				<p class="mwpspfw-field-description"><?php esc_html_e( 'Changes stay listed until something verifies them: the update package WordPress downloaded, wordpress.org checksums, matching copies on other managed sites, or you. Scanning never accepts a change on its own.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+				<?php if ( $sync_scan ) : ?>
+					<p class="mwpspfw-field-description"><?php esc_html_e( 'This site is scanned every time it syncs with this dashboard, so the list below is as recent as its last sync or scheduled scan. Scan now rescans immediately.', 'mainwp-simple-performance-for-wordpress' ); ?></p>
+				<?php endif; ?>
 				<div class="mwpspfw-file-review-body"></div>
 				<p class="mwpspfw-file-review-actions">
 					<button type="button" class="ui button mwpspfw-scan-files-btn"><?php esc_html_e( 'Scan now', 'mainwp-simple-performance-for-wordpress' ); ?></button>
@@ -523,8 +534,26 @@ class MWPSPFW_Individual {
 	 */
 	public function ajax_scan_files() {
 		$site_id = $this->file_review_site_id();
+		$result  = MWPSPFW_Connector::scan_files( $site_id );
 
-		$this->send_file_review_result( MWPSPFW_Connector::scan_files( $site_id ) );
+		$this->send_file_review_result( $this->after_file_action( $site_id, $result ) );
+	}
+
+	/**
+	 * After a successful Scan now or Mark as verified, the site's pending set
+	 * may differ from what its last sync reported, so Fleet File Integrity
+	 * stops using that sync's fingerprints for it.
+	 *
+	 * @param int   $site_id MainWP internal website ID.
+	 * @param array $result  Connector result.
+	 * @return array The same result.
+	 */
+	private function after_file_action( $site_id, array $result ) {
+		if ( $result['ok'] ) {
+			MWPSPFW_Sync::forget_fingerprints( $site_id );
+		}
+
+		return $result;
 	}
 
 	/**
@@ -544,7 +573,7 @@ class MWPSPFW_Individual {
 			wp_send_json_error( array( 'message' => __( 'Unknown verification scope.', 'mainwp-simple-performance-for-wordpress' ) ) );
 		}
 
-		$this->send_file_review_result( MWPSPFW_Connector::verify_files( $site_id, $signature, $scope ) );
+		$this->send_file_review_result( $this->after_file_action( $site_id, MWPSPFW_Connector::verify_files( $site_id, $signature, $scope ) ) );
 	}
 
 	/**
